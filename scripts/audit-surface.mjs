@@ -10,6 +10,11 @@ import { labelForBucket } from './lib/wallet-buckets-contract.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const required = [
+  'index.html',
+  'app.html',
+  'entrar.html',
+  'cadastro.html',
+  'public/assets/hero-stadium.jpg',
   'app-proteger.html',
   'app-protecoes.html',
   'app-desafio.html',
@@ -20,11 +25,13 @@ const required = [
   'admin-monitoring-desafios.html',
   'admin-monitoring-protections.html',
   'admin-manual-deposits.html',
+  'admin-financeiro.html',
   'admin-users.html',
   'admin-transactions.html',
   'scripts/lib/protection-flow-contract.mjs',
   'scripts/lib/wallet-buckets-contract.mjs',
   'scripts/lib/admin-ops-contract.mjs',
+  'scripts/lib/financeiro-ops.mjs',
   'docs/PROTECTION_FLOW_LOCKED.md',
   'docs/SYSTEM_NON_REGRESSION.md',
   'AGENTS.md',

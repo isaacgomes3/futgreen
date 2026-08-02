@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
-  <title>Usuários · FUTGRN</title>
+  <title>Usuários · FUTGREEN</title>
   <link rel="stylesheet" href="/public/css/futgreen.css" />
 </head>
 <body>
@@ -18,26 +18,44 @@
   </div>
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
-    import { api, toast, brl, setImpersonate } from '/public/js/api.js';
+    import { api, toast, brl, setImpersonate, getEmail } from '/public/js/api.js';
     import { BUCKET_LABELS } from '/public/js/v2-financeiro.js';
 
-    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
-      localStorage.setItem('fg_email', 'admin@futgreen.local');
+    const email = getEmail();
+    if (!/admin|isaac|carlos|isaacgomes3/i.test(email)) {
+      localStorage.setItem('fg_email', 'isaacgomes3@gmail.com');
     }
     await mountShell({ admin: true });
-    const { users } = await api('/api/futgreen/users', { admin: true });
-    const el = document.getElementById('list');
 
-    el.innerHTML = users
-      .map(
-        (u) => `
-      <article class="mdz-card" data-id="${u.id}" data-email="${u.email}">
-        <div class="mdz-card-top"><span>${u.name} · ${u.email}</span><span>${u.role}</span></div>
+    async function load() {
+      const { users } = await api('/api/futgreen/users', { admin: true });
+      const el = document.getElementById('list');
+      const sorted = [...users].sort((a, b) => Number(a.is_active) - Number(b.is_active) || String(a.email).localeCompare(b.email));
+
+      if (!sorted.length) {
+        el.innerHTML = '<p class="fg-empty">Nenhum usuário.</p>';
+        return;
+      }
+
+      el.innerHTML = sorted
+        .map((u) => {
+          const active = u.is_active !== false;
+          const status = active
+            ? '<span class="fg-status active">Ativa</span>'
+            : '<span class="fg-status pending">Pendente</span>';
+          const activateBtn = active
+            ? `<button class="fg-btn ghost" type="button" data-active="0">Desativar</button>`
+            : `<button class="fg-btn" type="button" data-active="1">Ativar conta</button>`;
+          return `
+      <article class="mdz-card${active ? '' : ' is-pending'}" data-id="${u.id}" data-email="${u.email}">
+        <div class="mdz-card-top">
+          <span>${u.name} · ${u.email}</span>
+          <span>${u.role} · ${status}</span>
+        </div>
         <div class="fg-meta">
-          Apostador ${brl(u.wallet.balance_cents)} ·
-          Reembolso ${brl(u.wallet.deduction_balance_cents)} ·
-          Travado ${brl(u.wallet.locked_balance_cents)} ·
-          Desafio ${brl(u.wallet.desafio_balance_cents)}
+          Apostador ${brl(u.wallet?.balance_cents)} ·
+          Reembolso ${brl(u.wallet?.deduction_balance_cents)} ·
+          Jornada ${brl(u.wallet?.desafio_balance_cents)}
         </div>
         <form class="fg-form adj" style="grid-template-columns:1fr 1fr 1fr auto;display:grid;gap:.5rem;align-items:end">
           <label>Bucket
@@ -52,42 +70,64 @@
           <button class="fg-btn" type="submit">Ajustar</button>
         </form>
         <div class="mdz-card-foot">
-          <button class="fg-btn ghost" data-mirror>Espelho de conta</button>
+          ${activateBtn}
+          <button class="fg-btn ghost" type="button" data-mirror>Espelho de conta</button>
         </div>
-      </article>`,
-      )
-      .join('');
+      </article>`;
+        })
+        .join('');
 
-    el.querySelectorAll('.adj').forEach((form) => {
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        const card = form.closest('.mdz-card');
-        const fd = new FormData(form);
-        try {
-          await api('/api/futgreen/adjust-balance', {
-            method: 'POST',
-            admin: true,
-            body: {
-              user_id: card.dataset.id,
-              bucket: fd.get('bucket'),
-              delta: Number(fd.get('delta')),
-              note: fd.get('note'),
-            },
-          });
-          toast('Saldo ajustado');
-          location.reload();
-        } catch (err) {
-          toast(err.message);
-        }
-      };
-    });
+      el.querySelectorAll('.adj').forEach((form) => {
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          const card = form.closest('.mdz-card');
+          const fd = new FormData(form);
+          try {
+            await api('/api/futgreen/adjust-balance', {
+              method: 'POST',
+              admin: true,
+              body: {
+                user_id: card.dataset.id,
+                bucket: fd.get('bucket'),
+                delta: Number(fd.get('delta')),
+                note: fd.get('note'),
+              },
+            });
+            toast('Saldo ajustado');
+            await load();
+          } catch (err) {
+            toast(err.message);
+          }
+        };
+      });
 
-    el.querySelectorAll('[data-mirror]').forEach((btn) => {
-      btn.onclick = () => {
-        setImpersonate(btn.closest('.mdz-card').dataset.email);
-        location.href = '/app-proteger.html';
-      };
-    });
+      el.querySelectorAll('[data-active]').forEach((btn) => {
+        btn.onclick = async () => {
+          const card = btn.closest('.mdz-card');
+          const next = btn.dataset.active === '1';
+          try {
+            await api('/api/futgreen/users/set-active', {
+              method: 'POST',
+              admin: true,
+              body: { user_id: card.dataset.id, is_active: next },
+            });
+            toast(next ? 'Conta ativada' : 'Conta desativada');
+            await load();
+          } catch (err) {
+            toast(err.message);
+          }
+        };
+      });
+
+      el.querySelectorAll('[data-mirror]').forEach((btn) => {
+        btn.onclick = () => {
+          setImpersonate(btn.closest('.mdz-card').dataset.email);
+          location.href = '/app.html';
+        };
+      });
+    }
+
+    await load();
   </script>
 </body>
 </html>

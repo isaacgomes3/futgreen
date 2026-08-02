@@ -3,173 +3,50 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Visão Geral · FUTGRN</title>
+  <title>FUTGREEN — Proteção e operação no mercado de apostas</title>
+  <meta name="description" content="Ferramentas profissionais para proteger apostas e operar desafios no mercado esportivo, com estrutura, controle e segurança." />
   <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/public/brand/apple-touch-icon.png" />
+  <meta name="theme-color" content="#070908" />
   <link rel="stylesheet" href="/public/css/futgreen.css" />
 </head>
-<body>
-  <div class="fg-shell" id="fg-shell-root">
-    <main class="fg-main">
-      <h1 class="fg-page-title">Visão Geral</h1>
+<body class="fg-landing">
+  <header class="fg-landing-nav">
+    <a class="fg-brand" href="/" aria-label="FUTGREEN">
+      <img class="fg-logo" src="/public/brand/futgrn-mark.svg" width="28" height="28" alt="" />
+      <span class="fg-wordmark"><span class="fg-wm-lead">FUT</span><span class="fg-wm-accent">GREEN</span></span>
+    </a>
+    <div class="fg-landing-nav-actions">
+      <a class="fg-btn secondary" href="/entrar.html">Entrar</a>
+      <a class="fg-btn" href="/cadastro.html">Criar conta</a>
+    </div>
+  </header>
 
-      <div class="fg-dash-banners">
-        <article class="fg-promo">
-          <svg class="fg-promo-art" viewBox="0 0 240 120" aria-hidden="true">
-            <defs>
-              <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#c8ff00" stop-opacity="0.9"/>
-                <stop offset="100%" stop-color="#3dff9a" stop-opacity="0.2"/>
-              </linearGradient>
-            </defs>
-            <path d="M10 90 C40 88, 50 40, 80 55 S130 20, 160 35 210 10, 230 25" fill="none" stroke="url(#g1)" stroke-width="3"/>
-            <path d="M10 90 C40 88, 50 40, 80 55 S130 20, 160 35 210 10, 230 25 V120 H10 Z" fill="url(#g1)" opacity="0.15"/>
-          </svg>
-          <h3>Provedor de Liquidez</h3>
-          <p>Operação com profundidade de mercado e payout estruturado.</p>
-          <a href="/app-carteira.html">Quero ser provedor →</a>
-        </article>
-        <article class="fg-promo alt">
-          <svg class="fg-promo-art" viewBox="0 0 220 120" aria-hidden="true">
-            <g stroke="#c8ff00" stroke-width="1.4" fill="none" opacity="0.7">
-              <circle cx="40" cy="60" r="10"/>
-              <circle cx="110" cy="30" r="8"/>
-              <circle cx="160" cy="70" r="12"/>
-              <circle cx="90" cy="90" r="7"/>
-              <path d="M50 60 L100 34 M48 66 L85 88 M118 36 L150 65 M100 90 L150 75"/>
-            </g>
-          </svg>
-          <h3>Programa de Afiliados</h3>
-          <p>Rede, recorrência e comissão sobre o volume protegido.</p>
-          <a href="/app-desafio.html">Quero ser afiliado →</a>
-        </article>
+  <main class="fg-landing-hero">
+    <div class="fg-landing-media" aria-hidden="true">
+      <img
+        class="fg-landing-photo"
+        src="/public/assets/hero-stadium.jpg"
+        alt=""
+        width="1920"
+        height="1080"
+        fetchpriority="high"
+      />
+    </div>
+    <div class="fg-landing-veil" aria-hidden="true"></div>
+
+    <div class="fg-landing-copy">
+      <p class="fg-landing-brand anim-in" aria-label="FUTGREEN"><span class="fg-wm-lead">FUT</span><span class="fg-wm-accent">GREEN</span></p>
+      <h1 class="anim-in anim-delay-1">Operação profissional no mercado de apostas esportivas</h1>
+      <p class="fg-landing-lead anim-in anim-delay-2">
+        Proteja posições, gerencie capital e acompanhe desafios com ferramentas pensadas para segurança, disciplina e clareza operacional.
+      </p>
+      <div class="fg-cta-row anim-in anim-delay-3">
+        <a class="fg-btn" href="/cadastro.html">Criar conta</a>
+        <a class="fg-btn secondary" href="/entrar.html">Entrar</a>
       </div>
+    </div>
+  </main>
 
-      <div class="fg-kpi-row" id="kpis">
-        <div class="fg-kpi"><label>Saldo Apostador</label><strong class="lime" id="k-bal">—</strong></div>
-        <div class="fg-kpi"><label>Saldo Reembolso</label><strong id="k-reemb">—</strong></div>
-        <div class="fg-kpi"><label>Proteções Ativas</label><strong id="k-prot">—</strong></div>
-        <div class="fg-kpi"><label>Carteira Desafio</label><strong class="lime" id="k-des">—</strong></div>
-      </div>
-
-      <div class="fg-dash-bottom">
-        <article class="fg-card fg-chart-card">
-          <div class="fg-chart-head">
-            <div>
-              <h3>Evolução patrimonial</h3>
-              <div class="fg-big-num" id="pat-total">R$ 0,00<em id="pat-delta">+0,00%</em></div>
-            </div>
-          </div>
-          <svg class="fg-chart-svg" viewBox="0 0 560 180" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="fgLineGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="#3dff9a"/>
-                <stop offset="100%" stop-color="#c8ff00"/>
-              </linearGradient>
-              <linearGradient id="fgAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#c8ff00" stop-opacity="0.35"/>
-                <stop offset="100%" stop-color="#c8ff00" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <path class="area" id="chart-area" d=""/>
-            <path class="line" id="chart-line" d=""/>
-          </svg>
-        </article>
-
-        <article class="fg-card">
-          <h3 style="margin:0 0 0.6rem;font-family:var(--font-display);font-style:italic;text-transform:uppercase;font-size:1.05rem">Resumo operacional</h3>
-          <div class="fg-ops-list" id="ops">
-            <div class="fg-ops-row">
-              <div style="flex:1">
-                <span>Taxa de acerto</span>
-                <div class="fg-bar"><i id="win-bar" style="width:0%"></i></div>
-              </div>
-              <strong id="win-rate">—</strong>
-            </div>
-            <div class="fg-ops-row"><span>Proteções liquidas</span><strong id="op-settled">0</strong></div>
-            <div class="fg-ops-row"><span>Reembolsos</span><strong id="op-reemb">0</strong></div>
-            <div class="fg-ops-row"><span>Capital travado</span><strong id="op-locked">—</strong></div>
-            <div class="fg-ops-row"><span>Saldo Provedor</span><strong id="op-prov">—</strong></div>
-          </div>
-        </article>
-      </div>
-
-      <section class="fg-section" style="margin-top:1.4rem">
-        <h2>Atalhos de operação</h2>
-        <div class="fg-grid">
-          <a class="fg-match" href="/app-proteger.html">
-            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Proteger</h3>
-          </a>
-          <a class="fg-match" href="/app-desafio.html">
-            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Desafio</h3>
-          </a>
-          <a class="fg-match" href="/app-carteira.html">
-            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Carteira</h3>
-          </a>
-        </div>
-      </section>
-    </main>
-  </div>
-  <script type="module">
-    import { mountShell } from '/public/js/v2-shell.js';
-    import { api, brl } from '/public/js/api.js';
-
-    const me = await mountShell();
-    const w = me.wallet || {};
-
-    document.getElementById('k-bal').textContent = brl(w.balance_cents);
-    document.getElementById('k-reemb').textContent = brl(w.deduction_balance_cents);
-    document.getElementById('k-des').textContent = brl(w.desafio_balance_cents);
-    document.getElementById('op-locked').textContent = brl(w.locked_balance_cents);
-    document.getElementById('op-prov').textContent = brl(w.investor_balance_cents);
-
-    const patrimonio =
-      (w.balance_cents || 0) +
-      (w.deduction_balance_cents || 0) +
-      (w.locked_balance_cents || 0) +
-      (w.desafio_balance_cents || 0) +
-      (w.investor_balance_cents || 0);
-
-    let protections = [];
-    try {
-      const data = await api('/api/futgreen/protections');
-      protections = data.protections || [];
-    } catch { /* ignore */ }
-
-    const active = protections.filter((p) => p.status === 'active').length;
-    const settled = protections.filter((p) => String(p.status).startsWith('settled')).length;
-    const reemb = protections.filter((p) => p.result === 'reembolso').length;
-    const won = protections.filter((p) => p.result === 'ganho' || p.result === 'won').length;
-    const decided = protections.filter((p) => p.result).length;
-    const rate = decided ? Math.round((won / decided) * 1000) / 10 : 55.6;
-    const delta = active || settled ? '+2,40%' : '+0,00%';
-
-    document.getElementById('pat-total').innerHTML = `${brl(patrimonio)}<em id="pat-delta">${delta}</em>`;
-    document.getElementById('k-prot').textContent = String(active);
-    document.getElementById('op-settled').textContent = String(settled);
-    document.getElementById('op-reemb').textContent = String(reemb);
-    document.getElementById('win-rate').textContent = `${rate}%`;
-    document.getElementById('win-bar').style.width = `${Math.min(100, rate)}%`;
-
-    // sparkline patrimonial (demo suave a partir do saldo)
-    const pts = 12;
-    const values = Array.from({ length: pts }, (_, i) => {
-      const t = i / (pts - 1);
-      const base = Math.max(patrimonio * 0.72, 1);
-      return base + (patrimonio - base) * Math.pow(t, 1.6) + Math.sin(t * 6) * patrimonio * 0.02;
-    });
-    const max = Math.max(...values);
-    const min = Math.min(...values);
-    const W = 560, H = 180, pad = 12;
-    const coords = values.map((v, i) => {
-      const x = pad + (i / (pts - 1)) * (W - pad * 2);
-      const y = H - pad - ((v - min) / (max - min || 1)) * (H - pad * 2);
-      return [x, y];
-    });
-    const line = coords.map((c, i) => `${i ? 'L' : 'M'}${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ');
-    const area = `${line} L${(W - pad).toFixed(1)},${H} L${pad},${H} Z`;
-    document.getElementById('chart-line').setAttribute('d', line);
-    document.getElementById('chart-area').setAttribute('d', area);
-  </script>
 </body>
 </html>

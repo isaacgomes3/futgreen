@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Entrar · FUTGREEN</title>
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body class="fg-auth">
+  <div class="fg-auth-bg" aria-hidden="true">
+    <img src="/public/assets/hero-stadium.jpg" alt="" />
+  </div>
+  <main class="fg-auth-card">
+    <a class="fg-brand" href="/" aria-label="FUTGREEN">
+      <img class="fg-logo" src="/public/brand/futgrn-mark.svg" width="28" height="28" alt="" />
+      <span class="fg-wordmark"><span class="fg-wm-lead">FUT</span><span class="fg-wm-accent">GREEN</span></span>
+    </a>
+    <h1>Entrar</h1>
+    <p class="fg-auth-sub">Acesse sua conta para operar proteção e desafio.</p>
+    <p id="local-hint" class="fg-meta" hidden style="margin:0 0 0.75rem"></p>
+    <form id="form" class="fg-form">
+      <label>E-mail <input name="email" type="email" autocomplete="email" required /></label>
+      <label>Senha <input name="password" type="password" autocomplete="current-password" required minlength="6" /></label>
+      <button class="fg-btn" type="submit">Entrar</button>
+    </form>
+    <p class="fg-auth-foot">Ainda não tem conta? <a href="/cadastro.html">Criar conta</a></p>
+  </main>
+  <script type="module">
+    import { api, setEmail, toast } from '/public/js/api.js';
+
+    try {
+      const health = await fetch('/health').then((r) => r.json());
+      if (health.local) {
+        const hint = document.getElementById('local-hint');
+        hint.hidden = false;
+        hint.textContent =
+          'Local: admin@futgreen.local ou cliente@futgreen.local · senha Futgreen@local';
+        const form = document.getElementById('form');
+        if (!form.email.value) form.email.value = 'admin@futgreen.local';
+      }
+    } catch { /* ignore */ }
+
+    document.getElementById('form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const { user } = await api('/api/futgreen/auth/login', {
+          method: 'POST',
+          body: { email: fd.get('email'), password: fd.get('password') },
+        });
+        setEmail(user.email);
+        localStorage.setItem('fg_authed', '1');
+        toast('Bem-vindo, ' + (user.name || user.email));
+        location.href = '/app.html';
+      } catch (err) {
+        toast(err.message || 'Falha ao entrar');
+      }
+    };
+  </script>
+</body>
+</html>

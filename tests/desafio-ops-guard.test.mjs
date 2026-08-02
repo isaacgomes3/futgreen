@@ -30,7 +30,7 @@ test('edit_only preserva publicação', () => {
   assert.equal(merged.published_at, '2026-01-01');
 });
 
-test('Banca → Desafio bloqueada; Reembolso → Desafio ok', () => {
+test('Banca → Jornada bloqueada; Reembolso → Jornada ok', () => {
   assert.throws(() => assertTransferAllowed('balance_cents', 'desafio_balance_cents'), (e) => e.status === 403);
   assert.doesNotThrow(() => assertTransferAllowed('deduction_balance_cents', 'desafio_balance_cents'));
 });

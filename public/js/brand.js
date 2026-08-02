@@ -1,21 +1,28 @@
-/** Identidade FUTGRN */
+/** Identidade FUTGREEN */
 export const BRAND = {
-  name: 'FUTGRN',
-  short: 'FUTGRN',
-  legal: 'FutGrn',
+  name: 'FUTGREEN',
+  short: 'FUTGREEN',
+  legal: 'FutGreen',
   tagline: 'Proteção & Desafio',
+  /** FUT branco · GREEN lime — mesmo corte visual da marca */
+  parts: { lead: 'FUT', accent: 'GREEN' },
   mark: '/public/brand/futgrn-mark.svg',
   avatar: '/public/brand/futgrn-avatar.svg',
   iconPng: '/public/brand/futgrn-icon-1024.png',
   favicon: '/public/brand/favicon.svg',
 };
 
+/** Wordmark HTML: FUT (branco) + GREEN (lime) */
+export function wordmarkHtml() {
+  return `<span class="fg-wordmark" aria-label="${BRAND.name}"><span class="fg-wm-lead">${BRAND.parts.lead}</span><span class="fg-wm-accent">${BRAND.parts.accent}</span></span>`;
+}
+
 /** Wordmark HTML reutilizável (sidebar / mobile) */
 export function brandLink({ href = '/', compact = false } = {}) {
   return `
     <a class="fg-brand${compact ? ' fg-brand-mobile' : ''}" href="${href}" aria-label="${BRAND.name}">
       <img class="fg-logo" src="${BRAND.mark}" width="28" height="28" alt="" />
-      <span class="fg-wordmark">${BRAND.name}</span>
+      ${wordmarkHtml()}
     </a>
   `;
 }

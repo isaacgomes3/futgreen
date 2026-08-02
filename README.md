@@ -41,7 +41,7 @@ App direto: [http://localhost:3101](http://localhost:3101).
 ## API
 
 - Base: `/api/futgreen/*` (alias `/api/arbishield/*`)
-- Health: `GET /health` → `createProtectionModel=stake_lock_v1` · runtime v10
+- Health: `GET /health` → `createProtectionModel=stake_lock_v1` · runtime v13
 - Porta default: `3101`
 
 ### Integrações admin

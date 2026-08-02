@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="refresh" content="0;url=https://futgreen.com.br/app.html" />
+  <title>Abrir FUTGREEN seguro</title>
+  <script>
+    // Limpa cache da origem (quando aberto em HTTPS) e vai à Visão Geral
+    (async () => {
+      try {
+        if (location.protocol === 'http:') {
+          location.replace('https://futgreen.com.br/secure.html');
+          return;
+        }
+        if (typeof caches !== 'undefined') {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+      } catch { /* ignore */ }
+      location.replace('https://futgreen.com.br/app.html');
+    })();
+  </script>
+</head>
+<body style="margin:0;background:#070908;color:#c8ff00;font-family:sans-serif;display:grid;place-items:center;min-height:100vh">
+  <p>Abrindo conexão segura…</p>
+</body>
+</html>

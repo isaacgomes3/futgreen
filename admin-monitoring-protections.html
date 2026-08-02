@@ -12,7 +12,35 @@
     <main class="fg-main">
       <section class="fg-section">
         <h2>Monitor de Proteções</h2>
-        <div id="list"></div>
+        <p class="lead">Jogos lançados, clientes no evento e histórico por dia.</p>
+      </section>
+
+      <section class="fg-section">
+        <h3 class="fg-mon-title">Em andamento</h3>
+        <p class="fg-meta" style="margin-top:-0.25rem">Jogos publicados ainda não finalizados</p>
+        <div id="open" class="fg-mon-stack"></div>
+      </section>
+
+      <section class="fg-section">
+        <h3 class="fg-mon-title">Finalizados hoje</h3>
+        <div id="finished" class="fg-mon-stack"></div>
+      </section>
+
+      <section class="fg-section">
+        <div class="fg-mon-hist-head">
+          <div>
+            <h3 class="fg-mon-title">Histórico</h3>
+            <p class="fg-meta" style="margin:0">Eventos e clientes de um dia</p>
+          </div>
+          <form id="hist-form" class="fg-mon-day-form">
+            <label>
+              Dia
+              <input type="date" name="day" required />
+            </label>
+            <button class="fg-btn" type="submit">Filtrar</button>
+          </form>
+        </div>
+        <div id="history" class="fg-mon-stack"></div>
       </section>
     </main>
   </div>
@@ -25,54 +53,163 @@
     }
     await mountShell({ admin: true });
 
-    // Admin vê todas via users + protections por usuário — simplificado: dump store via matches settle list
-    // Endpoint: listamos proteções pedindo como cada user — aqui usamos transactions + me workaround:
-    // Expor via settle list: GET matches all + for each protection we need admin list
-    // Adicionamos fetch de users e proteções agregadas via API interna simples — usar transactions não basta.
-    // Fallback: pedir /api/futgreen/matches e instruir liquidação em admin-jogos; listar via endpoint users wallet locked.
+    const openEl = document.getElementById('open');
+    const finishedEl = document.getElementById('finished');
+    const historyEl = document.getElementById('history');
+    const histForm = document.getElementById('hist-form');
+    const dayInput = histForm.elements.day;
 
-    const { users } = await api('/api/futgreen/users', { admin: true });
-    const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
-    const { matches } = await api('/api/futgreen/matches?all=1');
-    const matchMap = Object.fromEntries(matches.map((m) => [m.id, m]));
-    const { protections } = await api('/api/futgreen/protections/all', { admin: true });
-    const all = protections
-      .filter((x) => x.status === 'active')
-      .map((p) => ({ ...p, user_email: userMap[p.user_id]?.email || p.user_id }));
+    const TEAM_PREFIX = /^(fc|ac|sc|st|cf|cd|afc|as|ss|sv|rc|rcd|ud|sd|bk|fk|sk|nk|vk)$/i;
+    function shortTeamName(name) {
+      const raw = String(name || '').trim();
+      if (!raw) return '—';
+      const parts = raw.split(/\s+/).filter(Boolean);
+      if (parts.length <= 1) return raw;
+      if (TEAM_PREFIX.test(parts[0])) return parts[1] || parts[0];
+      return parts[0];
+    }
 
-    const el = document.getElementById('list');
-    if (!all.length) {
-      el.innerHTML = '<p class="fg-empty">Nenhuma proteção ativa.</p>';
-    } else {
-      el.innerHTML = all
-        .map((p) => {
-          const m = matchMap[p.match_id];
-          return `
-          <article class="mdz-card" data-id="${p.id}">
-            <div class="mdz-card-top"><span>${p.user_email}</span><span>${fmtWhen(p.created_at)}</span></div>
-            <div class="mdz-card-game">${m ? `${m.home_team} × ${m.away_team}` : p.match_id}</div>
-            <div class="fg-meta">${p.side} @ ${p.odd} · ${brl(p.amount_cents)}</div>
-            <div class="mdz-card-foot">
-              <button class="fg-btn warn" data-act="close">Encerrar (sem estorno)</button>
-              <button class="fg-btn ghost" data-act="cancel">Cancelar</button>
-            </div>
-          </article>`;
-        })
-        .join('');
+    function scoreLabel(ev) {
+      if (ev.display_home_score == null && ev.home_score == null) return '—';
+      const hs = ev.display_home_score ?? ev.home_score ?? 0;
+      const as = ev.display_away_score ?? ev.away_score ?? 0;
+      return `${hs} – ${as}`;
+    }
 
-      el.querySelectorAll('[data-act]').forEach((btn) => {
+    function clientsTable(clients, { actions = false } = {}) {
+      if (!clients?.length) {
+        return '<p class="fg-empty" style="margin:0.5rem 0 0">Nenhum cliente neste evento.</p>';
+      }
+      return `
+        <div class="fg-table-wrap" style="margin-top:0.65rem">
+          <table class="fg-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Data/hora</th>
+                <th>Mercado</th>
+                <th>Cotação</th>
+                <th>Entrada</th>
+                <th>Status</th>
+                ${actions ? '<th></th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${clients
+                .map((c) => {
+                  const market = [c.market_name, c.selection_name].filter(Boolean).join(' · ') || '—';
+                  const status = c.result || c.status || '—';
+                  const acts = actions && c.status === 'active'
+                    ? `<td class="fg-mon-acts">
+                         <button type="button" class="fg-btn warn fg-btn-sm" data-act="close" data-id="${c.protection_id}">Encerrar</button>
+                         <button type="button" class="fg-btn ghost fg-btn-sm" data-act="cancel" data-id="${c.protection_id}">Cancelar</button>
+                       </td>`
+                    : actions
+                      ? '<td></td>'
+                      : '';
+                  return `
+                    <tr>
+                      <td>
+                        <strong>${c.user_email}</strong>
+                        ${c.user_name ? `<div class="fg-meta" style="margin:0">${c.user_name}</div>` : ''}
+                      </td>
+                      <td>${fmtWhen(c.created_at)}</td>
+                      <td>
+                        <span class="fg-prot-side ${String(c.side).toUpperCase() === 'LAY' ? 'is-lay' : 'is-back'}">${c.side || '—'}</span>
+                        <span class="fg-meta" style="margin:0 0 0 0.35rem">${market}</span>
+                      </td>
+                      <td>@ ${c.odd != null ? Number(c.odd).toFixed(2) : '—'}</td>
+                      <td>${brl(c.amount_cents)}</td>
+                      <td><span class="fg-status ${status}">${status}</span></td>
+                      ${acts}
+                    </tr>`;
+                })
+                .join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    function eventCard(ev, { mode = 'open' } = {}) {
+      const home = shortTeamName(ev.home_team);
+      const away = shortTeamName(ev.away_team);
+      const finished = mode !== 'open';
+      const score = finished
+        ? `<div class="fg-mon-score">${scoreLabel(ev)}</div>`
+        : ev.match_phase && ev.match_phase !== 'scheduled'
+          ? `<div class="fg-mon-score fg-mon-score-live">${scoreLabel(ev)}</div>`
+          : '';
+      const betbra = ev.exchange_url
+        ? `<a class="fg-btn ghost fg-btn-sm" href="${ev.exchange_url}" target="_blank" rel="noopener">BetBra</a>`
+        : '';
+      return `
+        <article class="mdz-card fg-mon-event ${finished ? 'is-finished' : ''}">
+          <div class="mdz-card-top">
+            <span>${ev.league || 'Futebol'} · ${ev.clients_count || 0} cliente(s) · ${brl(ev.volume_cents || 0)}</span>
+            <span>${fmtWhen(ev.starts_at)}</span>
+          </div>
+          <div class="fg-mon-event-head">
+            <div class="mdz-card-game" title="${ev.home_team} × ${ev.away_team}">${home} × ${away}</div>
+            ${score}
+            ${betbra}
+          </div>
+          ${clientsTable(ev.clients, { actions: mode === 'open' })}
+        </article>`;
+    }
+
+    function renderStack(el, events, mode) {
+      if (!events?.length) {
+        el.innerHTML =
+          mode === 'open'
+            ? '<p class="fg-empty">Nenhum jogo em andamento.</p>'
+            : '<p class="fg-empty">Nenhum evento neste período.</p>';
+        return;
+      }
+      el.innerHTML = events.map((ev) => eventCard(ev, { mode })).join('');
+    }
+
+    async function bindActions(root) {
+      root.querySelectorAll('[data-act]').forEach((btn) => {
         btn.onclick = async () => {
-          const id = btn.closest('[data-id]').dataset.id;
           const path = btn.dataset.act === 'close' ? 'protection-close' : 'protection-cancel';
           try {
-            await api(`/api/futgreen/${path}`, { method: 'POST', admin: true, body: { protection_id: id } });
-            toast(btn.dataset.act === 'close' ? 'Encerrada' : 'Cancelada — stake devolvido');
-            location.reload();
+            await api(`/api/futgreen/${path}`, {
+              method: 'POST',
+              admin: true,
+              body: { protection_id: btn.dataset.id },
+            });
+            toast(btn.dataset.act === 'close' ? 'Encerrada' : 'Cancelada');
+            await load(dayInput.value);
           } catch (e) {
             toast(e.message);
           }
         };
       });
+    }
+
+    async function load(day) {
+      const q = day ? `?day=${encodeURIComponent(day)}` : '';
+      const data = await api(`/api/futgreen/protections/monitor${q}`, { admin: true });
+      if (!dayInput.value) dayInput.value = data.day || data.today;
+      renderStack(openEl, data.open, 'open');
+      renderStack(finishedEl, data.finished_today, 'finished');
+      renderStack(historyEl, data.history, 'history');
+      await bindActions(openEl);
+    }
+
+    histForm.onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await load(dayInput.value);
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    try {
+      await load();
+    } catch (e) {
+      openEl.innerHTML = `<p class="fg-empty">${e.message}</p>`;
     }
   </script>
 </body>

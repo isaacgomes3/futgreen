@@ -1,5 +1,5 @@
 /**
- * Cliente BetBra Mexchange (prelive / Match Odds)
+ * Cliente BetBra Mexchange (prelive — todos os mercados)
  * Base: tips3x3/src/lib/betbra
  */
 
@@ -66,12 +66,28 @@ export async function listSoccerEvents(opts = {}) {
   return getJson(`${BETBRA.mexchangeApi}/events?${params}`);
 }
 
-export async function getEvent(eventId, priceDepth = 3) {
+/**
+ * Detalhe do evento. Sem market-ids a BetBra só preenche preços do Match Odds;
+ * com market-ids (csv) hidrata back/lay de todos os mercados pedidos.
+ */
+export async function getEvent(eventId, priceDepth = 3, opts = {}) {
   const params = new URLSearchParams({
     'odds-type': 'DECIMAL',
     'price-depth': String(priceDepth),
   });
+  if (opts.marketIds?.length) {
+    params.set('market-ids', opts.marketIds.map(String).join(','));
+  }
   return getJson(`${BETBRA.mexchangeApi}/events/${eventId}?${params}`);
+}
+
+/** Evento completo com odds back/lay de TODOS os mercados (não só Match Odds) */
+export async function getEventWithAllMarkets(eventId, priceDepth = 3) {
+  const bare = await getEvent(eventId, priceDepth);
+  const ids = (bare.markets || []).map((m) => m.id).filter((id) => id != null);
+  if (!ids.length) return bare;
+  // Re-fetch hidratando preços de cada mercado
+  return getEvent(eventId, priceDepth, { marketIds: ids });
 }
 
 function bestPrice(runner, side) {
@@ -104,33 +120,181 @@ export function parseEventTeams(ev) {
   return { home_team: home, away_team: away, league };
 }
 
-export function extractMatchOdds(ev) {
-  const markets = ev.markets || [];
-  const mo =
-    markets.find((m) => /match odds/i.test(m['name-original'] || m.name || '')) ||
-    markets.find((m) => m['market-type'] === 'one_x_two') ||
-    markets[0];
-  if (!mo) return { runners: [], market_id: null, volume: 0 };
+function mapRunnerPrices(r) {
+  const back = bestPrice(r, 'back');
+  const lay = bestPrice(r, 'lay');
+  return {
+    id: r.id ?? null,
+    name: r.name || r['name-original'] || '—',
+    back_odd: back ? Number(back.odds) : null,
+    lay_odd: lay ? Number(lay.odds) : null,
+    back_liq: back ? Number(back['available-amount'] || 0) : 0,
+    lay_liq: lay ? Number(lay['available-amount'] || 0) : 0,
+    volume: Number(r.volume || 0),
+  };
+}
 
-  const runners = (mo.runners || []).map((r) => {
-    const back = bestPrice(r, 'back');
-    const lay = bestPrice(r, 'lay');
+function marketDisplayName(m) {
+  const base = m['name-original'] || m.name || 'Mercado';
+  const h = m.handicap;
+  if (h == null || h === '') return base;
+  const hs = String(h);
+  if (String(base).includes(hs)) return base;
+  return `${base} ${hs}`;
+}
+
+/** Todos os mercados do evento com melhor back/lay por selection */
+export function extractAllMarkets(ev) {
+  return (ev.markets || []).map((m) => {
+    const runners = (m.runners || []).map(mapRunnerPrices);
+    const marketId = m.id || null;
     return {
-      id: r.id,
-      name: r.name,
-      back_odd: back ? Number(back.odds) : null,
-      lay_odd: lay ? Number(lay.odds) : null,
-      back_liq: back ? Number(back['available-amount'] || 0) : 0,
-      lay_liq: lay ? Number(lay['available-amount'] || 0) : 0,
-      volume: Number(r.volume || 0),
+      id: marketId,
+      name: marketDisplayName(m),
+      market_type: m['market-type'] || m.type || null,
+      handicap: m.handicap ?? null,
+      status: m.status || null,
+      volume: Number(m.volume || 0),
+      in_running: Boolean(m['in-running-flag'] || m['in-play'] || false),
+      runners,
+      exchange_url: marketId
+        ? `${BETBRA.openExchangeWeb}/exchange/sport/soccer/event/${ev.id}/market/${marketId}`
+        : `${BETBRA.openExchangeWeb}/exchange/sport/soccer/event/${ev.id}`,
     };
   });
+}
+
+export function extractMatchOdds(ev) {
+  const markets = extractAllMarkets(ev);
+  const mo =
+    markets.find((m) => /match odds/i.test(m.name || '')) ||
+    markets.find((m) => m.market_type === 'one_x_two') ||
+    markets[0];
+  if (!mo) return { runners: [], market_id: null, volume: 0 };
 
   return {
     market_id: mo.id || null,
     volume: Number(mo.volume || ev.volume || 0),
-    runners,
+    runners: mo.runners,
   };
+}
+
+/** Detalhe admin: evento + todos os mercados back/lay */
+export function normalizeEventDetail(ev) {
+  const base = normalizePreliveEvent(ev);
+  const markets = extractAllMarkets(ev);
+  return {
+    ...base,
+    markets,
+    markets_count: markets.length,
+  };
+}
+
+function oddsSnapshotFromMarket(market, teams = {}) {
+  const runners = market.runners || [];
+  const isMatchOdds =
+    /match odds/i.test(market.name || '') || market.market_type === 'one_x_two';
+  if (isMatchOdds) {
+    const home =
+      runners.find((r) => r.name === teams.home_team) || runners[0] || null;
+    const away =
+      runners.find((r) => r.name === teams.away_team) || runners[1] || null;
+    const draw = runners.find((r) => /draw|empate/i.test(r.name || '')) || null;
+    return {
+      home_back: home?.back_odd ?? null,
+      home_lay: home?.lay_odd ?? null,
+      away_back: away?.back_odd ?? null,
+      away_lay: away?.lay_odd ?? null,
+      draw_back: draw?.back_odd ?? null,
+      draw_lay: draw?.lay_odd ?? null,
+      runners: runners.map((r) => ({
+        name: r.name,
+        back: r.back_odd,
+        lay: r.lay_odd,
+      })),
+    };
+  }
+  return {
+    market_name: market.name,
+    runners: runners.map((r) => ({
+      name: r.name,
+      back: r.back_odd,
+      lay: r.lay_odd,
+    })),
+  };
+}
+
+/** Campos de match a partir de um mercado selecionado do evento */
+export function marketToMatchFields(eventBase, market) {
+  const teams = {
+    home_team: eventBase.home_team,
+    away_team: eventBase.away_team,
+  };
+  return {
+    market_id: market.id || null,
+    market_name: market.name || 'Mercado',
+    market_type: market.market_type || null,
+    exchange_url: market.exchange_url || eventBase.exchange_url || null,
+    odds_snapshot: oddsSnapshotFromMarket(market, teams),
+    volume: Number(market.volume || 0),
+  };
+}
+
+/** Resolve mercados por id a partir do detalhe do evento */
+export function pickMarketsByIds(eventDetail, marketIds) {
+  const wanted = new Set((marketIds || []).map(String).filter(Boolean));
+  if (!wanted.size) return [];
+  return (eventDetail.markets || []).filter((m) => m.id != null && wanted.has(String(m.id)));
+}
+
+/**
+ * Selection de odd (carrinho): { market_id, runner_name, side: BACK|LAY, odd }
+ * → campos de match para lançar ao cliente
+ */
+export function selectionToMatchFields(eventBase, market, selection) {
+  const side = String(selection.side || '').toUpperCase() === 'LAY' ? 'LAY' : 'BACK';
+  const odd = Number(selection.odd);
+  const runnerName = selection.runner_name || selection.selection_name || '—';
+  const base = marketToMatchFields(eventBase, market);
+  return {
+    ...base,
+    selection_name: runnerName,
+    side,
+    odd: Number.isFinite(odd) && odd > 1 ? odd : null,
+    label: `${base.market_name} · ${runnerName} ${side}${Number.isFinite(odd) ? ` @ ${odd}` : ''}`,
+  };
+}
+
+/** Resolve selections do carrinho contra o detalhe do evento */
+export function resolveCartSelections(eventDetail, selections) {
+  const byMarket = new Map((eventDetail.markets || []).map((m) => [String(m.id), m]));
+  const out = [];
+  for (const sel of selections || []) {
+    const market = byMarket.get(String(sel.market_id));
+    if (!market) continue;
+    const side = String(sel.side || '').toUpperCase() === 'LAY' ? 'LAY' : 'BACK';
+    let odd = Number(sel.odd);
+    const runner = (market.runners || []).find(
+      (r) =>
+        String(r.name) === String(sel.runner_name || sel.selection_name) ||
+        (sel.runner_id != null && String(r.id) === String(sel.runner_id)),
+    );
+    if (runner && !(Number.isFinite(odd) && odd > 1)) {
+      odd = side === 'LAY' ? runner.lay_odd : runner.back_odd;
+    }
+    if (!(Number.isFinite(odd) && odd > 1)) continue;
+    out.push({
+      market,
+      selection: {
+        market_id: market.id,
+        runner_name: runner?.name || sel.runner_name || sel.selection_name,
+        runner_id: runner?.id ?? sel.runner_id ?? null,
+        side,
+        odd,
+      },
+    });
+  }
+  return out;
 }
 
 /** Normaliza evento BetBra → payload admin (proteger / desafio) */

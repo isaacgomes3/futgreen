@@ -1,10 +1,12 @@
 /**
- * wallet-buckets-contract-v1
+ * wallet-buckets-contract-v2
  * Labels oficiais da UI ↔ colunas de profiles
  * Nunca exibir "Saldo Dedução" — nome oficial é Saldo Reembolso.
+ * Carteira do produto Desafio = Carteira Jornada (coluna desafio_balance_cents).
+ * Saldo Travado existe no modelo, mas não é superfície de UI (entrada sem trava).
  */
 
-export const WALLET_BUCKETS_VERSION = 'wallet-buckets-contract-v1';
+export const WALLET_BUCKETS_VERSION = 'wallet-buckets-contract-v2';
 
 export const BUCKETS = Object.freeze({
   balance_cents: {
@@ -12,36 +14,42 @@ export const BUCKETS = Object.freeze({
     label: 'Saldo Apostador',
     shortLabel: 'Apostador',
     aliases: ['Saldo Real', 'Banca'],
+    uiVisible: true,
   },
   deduction_balance_cents: {
     column: 'deduction_balance_cents',
     label: 'Saldo Reembolso',
     shortLabel: 'Reembolso',
     aliases: [], // nunca "Saldo Dedução"
+    uiVisible: true,
   },
   locked_balance_cents: {
     column: 'locked_balance_cents',
     label: 'Saldo Travado',
     shortLabel: 'Travado',
     aliases: [],
+    uiVisible: false,
   },
   desafio_balance_cents: {
     column: 'desafio_balance_cents',
-    label: 'Carteira Desafio',
-    shortLabel: 'Desafio',
-    aliases: [],
+    label: 'Carteira Jornada',
+    shortLabel: 'Jornada',
+    aliases: ['Carteira Desafio', 'Desafio'],
+    uiVisible: true,
   },
   investor_balance_cents: {
     column: 'investor_balance_cents',
     label: 'Saldo Provedor',
     shortLabel: 'Provedor',
     aliases: [],
+    uiVisible: true,
   },
   demo_balance_cents: {
     column: 'demo_balance_cents',
     label: 'Demo',
     shortLabel: 'Demo',
     aliases: [],
+    uiVisible: true,
   },
 });
 
@@ -53,7 +61,7 @@ export const TX_TYPES = Object.freeze({
   protection_refund: 'Estorno',
   protection_unlock: 'Liberação',
   protection_release: 'Liberação',
-  desafio_deposit: 'Depósito Desafio',
+  desafio_deposit: 'Depósito Jornada',
   desafio_cancel_refund: 'Estorno (cancelado)',
   desafio_void_refund: 'Estorno Empate Anula',
   desafio_forfeit_to_provider: 'Forfeit → Provedor',
@@ -63,8 +71,11 @@ export const TX_TYPES = Object.freeze({
   admin_adjustment_debit: 'Ajuste manual (débito)',
   provider_deposit: 'Crédito Provedor',
   manual_deposit: 'Depósito manual',
-  transfer_reembolso_to_desafio: 'Reembolso → Desafio',
+  transfer_reembolso_to_desafio: 'Reembolso → Jornada',
   deduction_withdraw: 'Saque Saldo Reembolso',
+  deduction_withdraw_hold: 'Saque Reembolso (reserva)',
+  deduction_withdraw_paid: 'Saque Reembolso (pago)',
+  deduction_withdraw_rejected: 'Saque Reembolso (rejeitado)',
 });
 
 /** Transferências permitidas entre buckets */
@@ -76,10 +87,10 @@ export function isTransferAllowed(from, to) {
   return ALLOWED_TRANSFERS.some((t) => t.from === from && t.to === to);
 }
 
-/** Banca (Apostador) → Desafio é bloqueada */
+/** Banca (Apostador) → Jornada é bloqueada */
 export function assertTransferAllowed(from, to) {
   if (from === 'balance_cents' && to === 'desafio_balance_cents') {
-    const err = new Error('Transferência Banca → Desafio bloqueada');
+    const err = new Error('Transferência Banca → Jornada bloqueada');
     err.status = 403;
     err.code = 'TRANSFER_BLOCKED';
     throw err;
@@ -94,6 +105,15 @@ export function assertTransferAllowed(from, to) {
 
 export function labelForBucket(column) {
   return BUCKETS[column]?.label || column;
+}
+
+export function shortLabelForBucket(column) {
+  return BUCKETS[column]?.shortLabel || labelForBucket(column);
+}
+
+/** Buckets exibidos em chips/cards do cliente (exclui Travado). */
+export function uiVisibleBucketKeys() {
+  return Object.keys(BUCKETS).filter((k) => BUCKETS[k].uiVisible !== false);
 }
 
 export function labelForTxType(type) {

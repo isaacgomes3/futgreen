@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Criar conta · FUTGREEN</title>
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body class="fg-auth">
+  <div class="fg-auth-bg" aria-hidden="true">
+    <img src="/public/assets/hero-stadium.jpg" alt="" />
+  </div>
+  <main class="fg-auth-card">
+    <a class="fg-brand" href="/" aria-label="FUTGREEN">
+      <img class="fg-logo" src="/public/brand/futgrn-mark.svg" width="28" height="28" alt="" />
+      <span class="fg-wordmark"><span class="fg-wm-lead">FUT</span><span class="fg-wm-accent">GREEN</span></span>
+    </a>
+    <h1>Criar conta</h1>
+    <p class="fg-auth-sub">Comece a operar com ferramentas estruturadas para o mercado esportivo.</p>
+    <form id="form" class="fg-form">
+      <label>Nome <input name="name" type="text" autocomplete="name" required maxlength="80" /></label>
+      <label>E-mail <input name="email" type="email" autocomplete="email" required /></label>
+      <label>Senha <input name="password" type="password" autocomplete="new-password" required minlength="6" /></label>
+      <button class="fg-btn" type="submit">Criar conta</button>
+    </form>
+    <p class="fg-auth-foot">Já tem conta? <a href="/entrar.html">Entrar</a></p>
+  </main>
+  <script type="module">
+    import { api, setEmail, toast } from '/public/js/api.js';
+
+    document.getElementById('form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const data = await api('/api/futgreen/auth/register', {
+          method: 'POST',
+          body: {
+            name: fd.get('name'),
+            email: fd.get('email'),
+            password: fd.get('password'),
+          },
+        });
+        if (data.pending_activation || data.user?.is_active === false) {
+          toast('Conta criada — aguarde ativação do administrador');
+          location.href = '/entrar.html';
+          return;
+        }
+        setEmail(data.user.email);
+        localStorage.setItem('fg_authed', '1');
+        toast('Conta criada');
+        location.href = '/app.html';
+      } catch (err) {
+        toast(err.message || 'Falha no cadastro');
+      }
+    };
+  </script>
+</body>
+</html>

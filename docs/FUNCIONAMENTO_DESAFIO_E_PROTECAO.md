@@ -3,7 +3,7 @@
 **Público:** operação, suporte e desenvolvimento  
 **Data-base do código:** `main` (Agosto/2026)  
 **Produtos cobertos:** Jogos Protegidos (`stake_lock_v1`) · Desafio ArbiShield  
-**Contratos travados:** `protection-flow-contract-v10` · `system-non-regression-v1`
+**Contratos travados:** `protection-flow-contract-v13` · `system-non-regression-v1`
 
 > Ao descrever **proteção**, citar **somente** `stake_lock_v1` / contrato v10.  
 > Detalhe normativo da proteção: [`PROTECTION_FLOW_LOCKED.md`](./PROTECTION_FLOW_LOCKED.md).  
@@ -41,7 +41,7 @@ São produtos **independentes** (carteiras e APIs distintas), mas compartilham o
 
 | Regra | Comportamento |
 |---|---|
-| Trava de stake | Credita `locked_balance_cents`; **não cobra dedução** na entrada |
+| Trava de stake | **Não trava** (v12) — só registra valor da entrada BetBra |
 | Teto 50% | Máx. **50% do Saldo Apostador restante** naquele momento (sucessivo por evento) |
 | 1 op / evento | Uma proteção ativa por `user` + `match` (cancelada não conta) |
 | Pré-kickoff | Recusa se `now >= starts_at` |
@@ -53,15 +53,13 @@ Vocabulário da UI: **Reembolso** · **Ganho** · **Anula**.
 
 | Resultado (admin/UI) | Significado | Locked stake | Dinheiro |
 |---|---|---|---|
-| **Reembolso** (indicação perdeu / ArbiShield) | Cliente “perdeu” na exchange → ArbiShield cobre | Destrava | Credita o **stake no Saldo Reembolso** (`deduction_balance_cents`) |
-| **Ganho** (indicação bateu / Exchange) | Cliente ganhou na exchange | Destrava e **devolve** o stake à origem (Real/Demo/Provedor) | **R$ 0** no Reembolso; cobra **só a dedução ArbiShield** pela odd canônica do bilhete |
-| **Anula** (Empate Anula / void) | Evento anulado | Destrava e devolve à origem | Sem crédito Reembolso |
-| **Cancelar** | Admin ou contestação com estorno | Destrava e devolve à origem | Sem dedução |
+| **Reembolso** (indicação falhou) | Cliente perdeu na BetBra | — | Stake **integral** → **Saldo Reembolso** |
+| **Ganho** (indicação bateu) | Cliente ganhou na BetBra | — | **Sem movimento**; split 1% da entrada / 2,5% do bruto / resto FutGreen |
+| **Anula** (Empate Anula / void) | Empate ou void | — | Sem P&L (nem usuário nem empresa) |
+| **Cancelar** | Admin ou contestação | — | Sem movimento |
 
-**Dedução (quando ganha na Exchange):** calculada com a odd canônica  
-(`approved_odd` > `calculations.marketOdd` > `metadata.market_odd` > `row.odd`).  
-Exemplos LAY: **1000@10 → R$ 91,11** · **1000@32 → R$ 15,81**.  
-A fatia Exchange 4,5% já entra no cálculo — **não** debita de novo.
+**Entrada (v13):** não trava stake. **Economia no GANHO:** BACK = `stake×(odd−1)` · LAY = `liability/(odd−1)`.  
+Cliente **1% da stake/responsabilidade** · BetBra **2,5% do lucro bruto** · FutGreen = bruto − cliente − taxa — sem débito no Apostador.
 
 ### 2.4 Arquivos-chave (proteção)
 
@@ -254,7 +252,7 @@ Serviços em produção:
 
 - **Prelive / matches** — tipicamente `:3098` (`arbishield-prelive-events.mjs`)
 - **Shim / Desafio / admin finance** — tipicamente `:3101` (`arbishield-serverfn-shim.mjs`)
-- Health deve expor `protectionRuntime=protection-runtime-stake-lock-v10` e `createProtectionModel=stake_lock_v1`
+- Health deve expor `protectionRuntime=protection-runtime-stake-lock-v13` e `createProtectionModel=stake_lock_v1`
 
 ### 6.1 Jogos protegidos e grade
 
@@ -352,7 +350,7 @@ flowchart LR
 
 **Saúde da API**
 
-- `/health` com `createProtectionModel=stake_lock_v1` e runtime v10  
+- `/health` com `createProtectionModel=stake_lock_v1` e runtime v13  
 - Pós-deploy: `scripts/vps-check-pos-deploy-v10.sh`  
 - Auditoria superfície: `npm run audit:prod`
 

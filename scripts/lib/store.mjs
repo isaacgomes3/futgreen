@@ -12,6 +12,10 @@ const DEFAULT_DATA = () => ({
   desafio_participations: [],
   wallet_transactions: [],
   manual_deposits: [],
+  withdrawals: [],
+  expenses: [],
+  area_entries: [],
+  treasury_moves: [],
   sessions: {},
   football_teams: [
     { id: 'flamengo', name: 'Flamengo', logo: '/assets/teams/flamengo.svg' },
@@ -50,6 +54,11 @@ export class Store {
       this.ensureDir();
       this.save();
     }
+    // Migração leve: coleções financeiras novas
+    if (!Array.isArray(this.data.withdrawals)) this.data.withdrawals = [];
+    if (!Array.isArray(this.data.expenses)) this.data.expenses = [];
+    if (!Array.isArray(this.data.area_entries)) this.data.area_entries = [];
+    if (!Array.isArray(this.data.treasury_moves)) this.data.treasury_moves = [];
   }
 
   ensureDir() {
@@ -86,9 +95,12 @@ export class Store {
       email: user.email,
       name: user.name || user.email.split('@')[0],
       role: user.role || 'client',
+      is_active: user.is_active !== false,
       wallet: { ...emptyWallet(), ...user.wallet },
       created_at: new Date().toISOString(),
     };
+    if (user.password_hash) row.password_hash = user.password_hash;
+    if (user.is_active === false) row.is_active = false;
     this.data.users.push(row);
     this.save();
     return row;

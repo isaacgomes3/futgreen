@@ -3,14 +3,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStore } from './lib/store.mjs';
 import { createDesafio } from './lib/desafio-ops.mjs';
+import { hashPassword } from './lib/auth.mjs';
+import { LOCAL_DEV_PASSWORD } from './lib/local-auth.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const store = createStore(path.join(ROOT, 'data'));
+const password_hash = await hashPassword(LOCAL_DEV_PASSWORD);
 
 store.upsertUser({
   email: 'admin@futgreen.local',
   name: 'Admin',
   role: 'admin',
+  is_active: true,
+  password_hash,
   wallet: {
     balance_cents: 0,
     deduction_balance_cents: 0,
@@ -25,18 +30,24 @@ store.upsertUser({
   email: 'isaac@futgreen.local',
   name: 'Isaac',
   role: 'admin',
+  is_active: true,
+  password_hash,
 });
 
 store.upsertUser({
   email: 'carlos@futgreen.local',
   name: 'Carlos',
   role: 'admin',
+  is_active: true,
+  password_hash,
 });
 
 const cliente = store.upsertUser({
   email: 'cliente@futgreen.local',
   name: 'Cliente Demo',
   role: 'client',
+  is_active: true,
+  password_hash,
   wallet: {
     balance_cents: 1000000, // R$ 10.000
     deduction_balance_cents: 20000, // R$ 200 reembolso
@@ -80,9 +91,10 @@ const m2 = {
 };
 store.data.matches.push(m1, m2);
 
+// Seed de Jornada fica rascunho — não entra na grade/cliente
 await createDesafio(store, {
   title: 'Desafio seed',
-  publish: true,
+  publish: false,
   steps: [
     {
       home_team: 'Corinthians',
@@ -101,6 +113,7 @@ await createDesafio(store, {
 
 store.save();
 console.log('Seed OK');
+console.log('  login local (todos seed): senha', LOCAL_DEV_PASSWORD);
 console.log('  cliente:', cliente.email, cliente.wallet);
 console.log('  matches publicados:', store.data.matches.filter((m) => m.is_published).length);
 console.log('  desafios:', store.data.desafios.length);

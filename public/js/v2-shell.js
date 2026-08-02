@@ -2,11 +2,10 @@ import { api, brl, getEmail, setEmail, getImpersonate, setImpersonate } from './
 import { BRAND, brandLink, injectFavicons } from './brand.js';
 
 const CLIENT_LINKS = [
-  { href: '/', label: 'Visão Geral', ico: '◈', group: 'OPERAÇÕES' },
+  { href: '/app.html', label: 'Visão Geral', ico: '◈', group: 'OPERAÇÕES' },
   { href: '/app-proteger.html', label: 'Proteger', ico: '🛡', group: 'OPERAÇÕES' },
   { href: '/app-protecoes.html', label: 'Minhas Proteções', ico: '◎', group: 'OPERAÇÕES' },
-  { href: '/app-desafio.html', label: 'Desafio', ico: '⚡', group: 'OPERAÇÕES', novo: true },
-  { href: '/app-desafio-jornada.html', label: 'Jornada', ico: '↗', group: 'OPERAÇÕES' },
+  { href: '/app-desafio.html', label: 'Jornada', ico: '⚡', group: 'OPERAÇÕES', novo: true },
   { href: '/app-carteira.html', label: 'Carteira', ico: '₿', group: 'OPERAÇÕES' },
 ];
 
@@ -15,7 +14,7 @@ const ADMIN_LINKS = [
   { href: '/admin-desafios.html', label: 'Desafios', ico: '⚡', group: 'ADMIN' },
   { href: '/admin-monitoring-desafios.html', label: 'Monitor Desafios', ico: '◉', group: 'ADMIN' },
   { href: '/admin-monitoring-protections.html', label: 'Monitor Proteções', ico: '◎', group: 'ADMIN' },
-  { href: '/admin-manual-deposits.html', label: 'Depósitos', ico: '+', group: 'ADMIN' },
+  { href: '/admin-financeiro.html', label: 'Financeiro', ico: '₿', group: 'ADMIN' },
   { href: '/admin-users.html', label: 'Usuários', ico: '👤', group: 'ADMIN' },
   { href: '/admin-transactions.html', label: 'Extrato', ico: '☰', group: 'ADMIN' },
 ];
@@ -23,7 +22,10 @@ const ADMIN_LINKS = [
 function pathActive(href) {
   const here = location.pathname.replace(/\/$/, '') || '/';
   const target = href.replace(/\/$/, '') || '/';
-  return here === target || (target !== '/' && here.endsWith(target));
+  if (here === target || (target !== '/' && here.endsWith(target))) return true;
+  // Jornada unificada: URL antiga também marca a aba
+  if (target.endsWith('/app-desafio.html') && here.endsWith('/app-desafio-jornada.html')) return true;
+  return false;
 }
 
 function renderGroups(links) {
@@ -51,7 +53,7 @@ export async function mountShell({ admin = false } = {}) {
   document.body.classList.add('fg-app');
   injectFavicons();
   if (!document.title.includes(BRAND.name)) {
-    document.title = document.title.replace(/FutGreen|FutGrn/gi, BRAND.name);
+    document.title = document.title.replace(/FutGreen|FutGrn|FUTGRN/gi, BRAND.name);
     if (!document.title.includes(BRAND.name)) {
       document.title = `${document.title} · ${BRAND.name}`;
     }
@@ -82,7 +84,7 @@ export async function mountShell({ admin = false } = {}) {
   const w = me.wallet || {};
   const name = me.user?.name || me.user?.email?.split('@')[0] || 'User';
   const links = admin ? ADMIN_LINKS : CLIENT_LINKS;
-  const home = admin ? '/admin-jogos.html' : '/';
+  const home = admin ? '/admin-jogos.html' : '/app.html';
 
   const overlay = document.createElement('div');
   overlay.className = 'fg-nav-overlay';
@@ -102,9 +104,10 @@ export async function mountShell({ admin = false } = {}) {
       <div class="fg-nav-group">SISTEMA</div>
       ${
         admin
-          ? '<a class="fg-side-link" href="/"><span class="ico">↩</span>Modo usuário</a>'
+          ? '<a class="fg-side-link" href="/app.html"><span class="ico">↩</span>Modo usuário</a>'
           : '<a class="fg-side-link" href="/admin-jogos.html"><span class="ico">⌘</span>Modo ADM</a>'
       }
+      <a class="fg-side-link" href="/"><span class="ico">⌂</span>Site</a>
     </nav>
     <div class="fg-side-foot">
       <div class="fg-user-card">
@@ -130,11 +133,10 @@ export async function mountShell({ admin = false } = {}) {
     <div class="fg-bal-strip" id="fg-balance-chips">
       <div class="fg-bal"><small>Apostador</small><strong>${brl(w.balance_cents)}</strong></div>
       <div class="fg-bal"><small>Reembolso</small><strong>${brl(w.deduction_balance_cents)}</strong></div>
-      <div class="fg-bal"><small>Desafio</small><strong>${brl(w.desafio_balance_cents)}</strong></div>
-      <div class="fg-bal"><small>Travado</small><strong>${brl(w.locked_balance_cents)}</strong></div>
+      <div class="fg-bal"><small>Jornada</small><strong>${brl(w.desafio_balance_cents)}</strong></div>
     </div>
     <div class="fg-top-actions">
-      ${admin ? '<a class="fg-btn ghost fg-hide-xs" href="/">Modo usuário</a>' : '<a class="fg-btn ghost fg-hide-xs" href="/admin-jogos.html">Modo ADM</a>'}
+      ${admin ? '<a class="fg-btn ghost fg-hide-xs" href="/app.html">Modo usuário</a>' : '<a class="fg-btn ghost fg-hide-xs" href="/admin-jogos.html">Modo ADM</a>'}
       <a class="fg-btn" href="/app-carteira.html">+ Depósito</a>
     </div>
   `;

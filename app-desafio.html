@@ -4,15 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
-  <title>Desafio · FUTGRN</title>
+  <title>Jornada · FUTGRN</title>
   <link rel="stylesheet" href="/public/css/futgreen.css" />
 </head>
 <body>
   <div class="fg-shell" id="fg-shell-root">
     <main class="fg-main">
       <section class="fg-section">
-        <h2>Desafio FUTGRN</h2>
+        <h2>Jornada</h2>
+        <p class="lead">Suas entradas e os desafios disponíveis na grade.</p>
         <div id="lock" class="fg-empty" hidden></div>
+      </section>
+
+      <section class="fg-section">
+        <h3 class="fg-ind-list-head" style="margin-bottom:0.75rem">Minha jornada</h3>
+        <div id="journey"></div>
+      </section>
+
+      <section class="fg-section">
+        <h3 class="fg-ind-list-head" style="margin-bottom:0.75rem">Grade disponível</h3>
         <div id="grade" class="fg-grid"></div>
       </section>
     </main>
@@ -21,23 +31,52 @@
     import { mountShell } from '/public/js/v2-shell.js';
     import { api, brl, toast, fmtWhen } from '/public/js/api.js';
     import { previewSinal } from '/public/js/desafio-ciclo-math.js';
-    import { teamBlock } from '/public/js/teams-ui.js';
+    import { teamBlock, teamPairCell } from '/public/js/teams-ui.js';
 
     await mountShell();
-    const data = await api('/api/futgreen/desafios');
     const lock = document.getElementById('lock');
     const grade = document.getElementById('grade');
+    const journey = document.getElementById('journey');
 
-    if (!data.unlocked) {
-      lock.hidden = false;
-      lock.innerHTML = `Carteira Desafio vazia. <a href="/app-carteira.html">Ir à Carteira</a>`;
+    async function loadJourney() {
+      const { participations } = await api('/api/futgreen/desafio-jornada', { method: 'POST', body: {} });
+      journey.innerHTML = !participations.length
+        ? '<p class="fg-empty">Nenhuma entrada ainda. Escolha um jogo na grade abaixo.</p>'
+        : `<div class="fg-grid">
+            ${participations
+              .map((p) => {
+                const s = p.step;
+                const game = s
+                  ? teamPairCell(s.home_team, s.away_team, s.home_logo, s.away_logo)
+                  : `<span>${p.step_id}</span>`;
+                return `
+                <article class="fg-match">
+                  ${game}
+                  <div class="fg-meta" style="margin-top:0.65rem">${fmtWhen(p.created_at)} · odd ${p.odd}</div>
+                  <div class="fg-meta">Stake ${brl(p.stake_cents)}</div>
+                  <span class="fg-status ${p.result || p.status}">${p.result || p.status}</span>
+                </article>`;
+              })
+              .join('')}
+          </div>`;
     }
 
-    if (!data.desafios?.length) {
-      grade.innerHTML = data.unlocked
-        ? '<p class="fg-empty">Nenhum desafio publicado no momento.</p>'
-        : '';
-    } else {
+    async function loadGrade() {
+      const data = await api('/api/futgreen/desafios');
+      if (!data.unlocked) {
+        lock.hidden = false;
+        lock.innerHTML = `Carteira Jornada vazia. <a href="/app-carteira.html">Ir à Carteira</a>`;
+      } else {
+        lock.hidden = true;
+      }
+
+      if (!data.desafios?.length) {
+        grade.innerHTML = data.unlocked
+          ? '<p class="fg-empty">Nenhum desafio publicado no momento.</p>'
+          : '';
+        return;
+      }
+
       grade.innerHTML = data.desafios
         .flatMap(({ desafio, steps }) =>
           steps
@@ -94,13 +133,15 @@
               },
             });
             toast('Entrada registrada');
-            location.href = '/app-desafio-jornada.html';
+            await Promise.all([loadJourney(), loadGrade()]);
           } catch (err) {
             toast(err.message);
           }
         };
       });
     }
+
+    await Promise.all([loadJourney(), loadGrade()]);
   </script>
 </body>
 </html>

@@ -3,7 +3,14 @@ import { assertCanCancelOrDeleteDesafio, editDesafioPreservesPublication } from 
 import { resolveTeamLogo } from './football-teams.mjs';
 
 export function listPublishedDesafios(store) {
-  return store.data.desafios.filter((d) => d.is_published && d.is_active && !d.deleted_at);
+  return store.data.desafios.filter(
+    (d) =>
+      d.is_published &&
+      d.is_active &&
+      !d.deleted_at &&
+      // nunca expor desafio de seed no cliente
+      !/seed/i.test(String(d.title || '')),
+  );
 }
 
 export function getDesafioBundle(store, desafioId) {
@@ -134,10 +141,10 @@ export function registerDesafioEntry(store, { userId, desafioId, stepId, stakeCe
   const stake = Math.round(Number(stakeCents));
   if (!(stake > 0)) throw Object.assign(new Error('stake inválido'), { status: 400 });
   if ((user.wallet.desafio_balance_cents || 0) < stake) {
-    throw Object.assign(new Error('Carteira Desafio insuficiente'), { status: 400 });
+    throw Object.assign(new Error('Carteira Jornada insuficiente'), { status: 400 });
   }
   if ((user.wallet.desafio_balance_cents || 0) <= 0) {
-    throw Object.assign(new Error('Grade só libera com Carteira Desafio > 0'), { status: 400 });
+    throw Object.assign(new Error('Grade só libera com Carteira Jornada > 0'), { status: 400 });
   }
 
   // Debita stake (PATCH direto — sem linha desafio_entry no ledger)

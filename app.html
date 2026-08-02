@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Visão Geral · FUTGRN</title>
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/public/brand/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <h1 class="fg-page-title">Visão Geral</h1>
+
+      <section class="fg-event-rail" id="event-rail" aria-label="Eventos">
+        <div class="fg-event-rail-head">
+          <h2 id="event-rail-title">Eventos disponíveis</h2>
+          <div class="fg-event-rail-nav">
+            <button type="button" data-rail="prev" aria-label="Anterior">‹</button>
+            <button type="button" data-rail="next" aria-label="Próximo">›</button>
+          </div>
+        </div>
+        <div class="fg-event-rail-track" id="event-rail-track" tabindex="0"></div>
+      </section>
+
+      <div class="fg-kpi-row" id="kpis">
+        <div class="fg-kpi"><label>Saldo Apostador</label><strong class="lime" id="k-bal">—</strong></div>
+        <div class="fg-kpi"><label>Saldo Reembolso</label><strong id="k-reemb">—</strong></div>
+        <div class="fg-kpi"><label>Proteções Ativas</label><strong id="k-prot">—</strong></div>
+        <div class="fg-kpi"><label>Carteira Jornada</label><strong class="lime" id="k-des">—</strong></div>
+      </div>
+
+      <div class="fg-dash-bottom">
+        <article class="fg-card fg-chart-card">
+          <div class="fg-chart-head">
+            <div>
+              <h3>Evolução patrimonial</h3>
+              <div class="fg-big-num" id="pat-total">R$ 0,00<em id="pat-delta">+0,00%</em></div>
+            </div>
+          </div>
+          <svg class="fg-chart-svg" viewBox="0 0 560 180" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="fgLineGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#3dff9a"/>
+                <stop offset="100%" stop-color="#c8ff00"/>
+              </linearGradient>
+              <linearGradient id="fgAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#c8ff00" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#c8ff00" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path class="area" id="chart-area" d=""/>
+            <path class="line" id="chart-line" d=""/>
+          </svg>
+        </article>
+
+        <article class="fg-card">
+          <h3 style="margin:0 0 0.6rem;font-family:var(--font-display);font-style:italic;text-transform:uppercase;font-size:1.05rem">Resumo operacional</h3>
+          <div class="fg-ops-list" id="ops">
+            <div class="fg-ops-row">
+              <div style="flex:1">
+                <span>Taxa de acerto</span>
+                <div class="fg-bar"><i id="win-bar" style="width:0%"></i></div>
+              </div>
+              <strong id="win-rate">—</strong>
+            </div>
+            <div class="fg-ops-row"><span>Proteções liquidas</span><strong id="op-settled">0</strong></div>
+            <div class="fg-ops-row"><span>Reembolsos</span><strong id="op-reemb">0</strong></div>
+            <div class="fg-ops-row"><span>Saldo Provedor</span><strong id="op-prov">—</strong></div>
+          </div>
+        </article>
+      </div>
+
+      <section class="fg-section" style="margin-top:1.4rem">
+        <h2>Atalhos de operação</h2>
+        <div class="fg-grid">
+          <a class="fg-match" href="/app-proteger.html">
+            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Proteger</h3>
+          </a>
+          <a class="fg-match" href="/app-desafio.html">
+            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Jornada</h3>
+          </a>
+          <a class="fg-match" href="/app-carteira.html">
+            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Carteira</h3>
+          </a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, brl, fmtWhen } from '/public/js/api.js';
+
+    const STADIUM = '/public/assets/hero-stadium.jpg';
+    const TEAM_PREFIX = /^(fc|ac|sc|st|cf|cd|afc|as|ss|sv|rc|rcd|ud|sd|bk|fk|sk|nk|vk)$/i;
+
+    const me = await mountShell();
+    const w = me.wallet || {};
+
+    document.getElementById('k-bal').textContent = brl(w.balance_cents);
+    document.getElementById('k-reemb').textContent = brl(w.deduction_balance_cents);
+    document.getElementById('k-des').textContent = brl(w.desafio_balance_cents);
+    document.getElementById('op-prov').textContent = brl(w.investor_balance_cents);
+
+    const patrimonio =
+      (w.balance_cents || 0) +
+      (w.deduction_balance_cents || 0) +
+      (w.desafio_balance_cents || 0) +
+      (w.investor_balance_cents || 0);
+
+    let protections = [];
+    try {
+      const data = await api('/api/futgreen/protections');
+      protections = data.protections || [];
+    } catch { /* ignore */ }
+
+    const active = protections.filter((p) => p.status === 'active').length;
+    const settled = protections.filter((p) => String(p.status).startsWith('settled')).length;
+    const reemb = protections.filter((p) => p.result === 'reembolso').length;
+    const won = protections.filter((p) => p.result === 'ganho' || p.result === 'won').length;
+    const decided = protections.filter((p) => p.result).length;
+    const rate = decided ? Math.round((won / decided) * 1000) / 10 : 55.6;
+    const delta = active || settled ? '+2,40%' : '+0,00%';
+
+    document.getElementById('pat-total').innerHTML = `${brl(patrimonio)}<em id="pat-delta">${delta}</em>`;
+    document.getElementById('k-prot').textContent = String(active);
+    document.getElementById('op-settled').textContent = String(settled);
+    document.getElementById('op-reemb').textContent = String(reemb);
+    document.getElementById('win-rate').textContent = `${rate}%`;
+    document.getElementById('win-bar').style.width = `${Math.min(100, rate)}%`;
+
+    // sparkline patrimonial (demo suave a partir do saldo)
+    const pts = 12;
+    const values = Array.from({ length: pts }, (_, i) => {
+      const t = i / (pts - 1);
+      const base = Math.max(patrimonio * 0.72, 1);
+      return base + (patrimonio - base) * Math.pow(t, 1.6) + Math.sin(t * 6) * patrimonio * 0.02;
+    });
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const W = 560, H = 180, pad = 12;
+    const coords = values.map((v, i) => {
+      const x = pad + (i / (pts - 1)) * (W - pad * 2);
+      const y = H - pad - ((v - min) / (max - min || 1)) * (H - pad * 2);
+      return [x, y];
+    });
+    const line = coords.map((c, i) => `${i ? 'L' : 'M'}${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ');
+    const area = `${line} L${(W - pad).toFixed(1)},${H} L${pad},${H} Z`;
+    document.getElementById('chart-line').setAttribute('d', line);
+    document.getElementById('chart-area').setAttribute('d', area);
+
+    function shortTeamName(name) {
+      const raw = String(name || '').trim();
+      if (!raw) return '—';
+      const parts = raw.split(/\s+/).filter(Boolean);
+      if (parts.length <= 1) return raw;
+      if (TEAM_PREFIX.test(parts[0])) return parts[1] || parts[0];
+      return parts[0];
+    }
+
+    function kickoffPassed(startsAt, now = Date.now()) {
+      const t = new Date(startsAt || 0).getTime();
+      return Number.isFinite(t) && t > 0 && now >= t;
+    }
+
+    function isAdminLaunch(m) {
+      const side = String(m?.side || '').toUpperCase();
+      const odd = Number(m?.odd);
+      return (side === 'BACK' || side === 'LAY') && Number.isFinite(odd) && odd > 1;
+    }
+
+    function cardBg(row) {
+      const raw = row?.card_bg || row?.home_art || row?.away_art || '';
+      if (!raw || /\/badge\//i.test(raw)) return STADIUM;
+      return raw;
+    }
+
+    function fmtKickBadge(iso) {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        const now = new Date();
+        const hm = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (d.toDateString() === now.toDateString()) return `Hoje ${hm}`;
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        if (d.toDateString() === tomorrow.toDateString()) return `Amanhã ${hm}`;
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return fmtWhen(iso);
+      }
+    }
+
+    function eventKey(m) {
+      return [m.home_team, m.away_team, m.starts_at, m.league || ''].join('|');
+    }
+
+    function groupProteger(matches) {
+      const map = new Map();
+      for (const m of matches) {
+        const key = eventKey(m);
+        if (!map.has(key)) {
+          map.set(key, {
+            key,
+            home_team: m.home_team,
+            away_team: m.away_team,
+            home_logo: m.home_logo,
+            away_logo: m.away_logo,
+            starts_at: m.starts_at,
+            league: m.league,
+            card_bg: m.card_bg || m.home_art || m.away_art,
+            match_live: m.match_live,
+            match_finished: m.match_finished,
+            match_phase: m.match_phase,
+            odd: m.odd,
+            side: m.side,
+            market_name: m.market_name,
+            selection_name: m.selection_name,
+            count: 0,
+          });
+        }
+        const g = map.get(key);
+        g.count += 1;
+        if (!g.card_bg && (m.card_bg || m.home_art || m.away_art)) {
+          g.card_bg = m.card_bg || m.home_art || m.away_art;
+        }
+        if (!g.home_logo && m.home_logo) g.home_logo = m.home_logo;
+        if (!g.away_logo && m.away_logo) g.away_logo = m.away_logo;
+        if (m.match_live) g.match_live = true;
+        if (m.match_finished) g.match_finished = true;
+      }
+      return [...map.values()];
+    }
+
+    function cardHtml(ev) {
+      const kindClass = ev.past ? 'is-past' : ev.kind === 'jornada' ? 'is-jornada' : '';
+      const when = ev.past
+        ? 'Encerrado'
+        : ev.live
+          ? 'Ao vivo'
+          : fmtKickBadge(ev.starts_at);
+      const meta = ev.meta || '';
+      const cta = ev.past ? 'Ver histórico →' : ev.kind === 'jornada' ? 'Abrir Jornada →' : 'Proteger →';
+      const home = shortTeamName(ev.home_team);
+      const away = shortTeamName(ev.away_team);
+      return `
+        <a class="fg-event-card" href="${ev.href}">
+          <div class="fg-event-card-bg" aria-hidden="true">
+            <img src="${cardBg(ev)}" alt="" loading="lazy" />
+          </div>
+          <div class="fg-event-card-veil" aria-hidden="true"></div>
+          <div class="fg-event-card-body">
+            <div class="fg-event-card-top">
+              <span class="fg-event-kind ${kindClass}">${ev.kindLabel}</span>
+              <span class="fg-event-when">${when}</span>
+            </div>
+            <div class="fg-event-teams">
+              ${ev.home_logo ? `<img src="${ev.home_logo}" alt="" />` : ''}
+              <strong title="${ev.home_team}">${home}</strong>
+              <span class="fg-event-vs">×</span>
+              ${ev.away_logo ? `<img src="${ev.away_logo}" alt="" />` : ''}
+              <strong title="${ev.away_team}">${away}</strong>
+            </div>
+            ${meta ? `<p class="fg-event-meta">${meta}</p>` : ''}
+            <span class="fg-event-cta">${cta}</span>
+          </div>
+        </a>`;
+    }
+
+    function mountRail(cards, { title, mode }) {
+      const titleEl = document.getElementById('event-rail-title');
+      const track = document.getElementById('event-rail-track');
+      titleEl.textContent = title;
+      track.dataset.mode = mode;
+      if (!cards.length) {
+        track.innerHTML = '<div class="fg-event-rail-empty">Nenhum evento para exibir agora.</div>';
+        return;
+      }
+      track.innerHTML = cards.map(cardHtml).join('');
+
+      const step = () => {
+        const card = track.querySelector('.fg-event-card');
+        return card ? card.getBoundingClientRect().width + 14 : 320;
+      };
+      document.querySelector('[data-rail="prev"]').onclick = () => {
+        track.scrollBy({ left: -step(), behavior: 'smooth' });
+      };
+      document.querySelector('[data-rail="next"]').onclick = () => {
+        track.scrollBy({ left: step(), behavior: 'smooth' });
+      };
+
+      let timer = null;
+      const play = () => {
+        stop();
+        if (cards.length < 2) return;
+        timer = setInterval(() => {
+          const maxScroll = track.scrollWidth - track.clientWidth - 4;
+          if (track.scrollLeft >= maxScroll) {
+            track.scrollTo({ left: 0, behavior: 'smooth' });
+          } else {
+            track.scrollBy({ left: step(), behavior: 'smooth' });
+          }
+        }, 4200);
+      };
+      const stop = () => {
+        if (timer) clearInterval(timer);
+        timer = null;
+      };
+      track.addEventListener('pointerenter', stop);
+      track.addEventListener('pointerleave', play);
+      track.addEventListener('touchstart', stop, { passive: true });
+      play();
+    }
+
+    async function loadEventRail() {
+      const [matchData, desafioData] = await Promise.all([
+        api('/api/futgreen/matches').catch(() => ({ matches: [], finished: [] })),
+        api('/api/futgreen/desafios?preview=1').catch(() => ({ desafios: [] })),
+      ]);
+
+      const now = Date.now();
+      const availableMatches = (matchData.matches || []).filter(isAdminLaunch);
+      const finishedMatches = (matchData.finished || []).filter(isAdminLaunch);
+
+      // Mesma fila da página Proteger (inclui ao vivo; só some quando encerrado)
+      const protegerOpen = groupProteger(availableMatches)
+        .filter((ev) => !ev.match_finished && ev.match_phase !== 'finished')
+        .map((ev) => {
+          const live = Boolean(ev.match_live) || kickoffPassed(ev.starts_at);
+          return {
+            kind: 'proteger',
+            kindLabel: 'Proteger',
+            href: '/app-proteger.html',
+            home_team: ev.home_team,
+            away_team: ev.away_team,
+            home_logo: ev.home_logo,
+            away_logo: ev.away_logo,
+            starts_at: ev.starts_at,
+            card_bg: ev.card_bg,
+            live,
+            past: false,
+            meta: [
+              ev.league,
+              ev.side && ev.odd ? `${String(ev.side).toUpperCase()} ${Number(ev.odd).toFixed(2)}` : null,
+              ev.count > 1 ? `${ev.count} mercados` : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+          };
+        });
+
+      const jornadaOpen = (desafioData.desafios || [])
+        .filter(({ desafio }) => desafio && !/seed/i.test(String(desafio.title || '')))
+        .flatMap(({ desafio, steps }) =>
+          (steps || [])
+            .filter((s) => s.status !== 'done')
+            .map((step) => {
+              const live = kickoffPassed(step.starts_at, now);
+              const team =
+                step.bet_team_side === 'away' ? step.away_team : step.home_team;
+              return {
+                kind: 'jornada',
+                kindLabel: 'Jornada',
+                href: '/app-desafio.html',
+                home_team: step.home_team,
+                away_team: step.away_team,
+                home_logo: step.home_logo,
+                away_logo: step.away_logo,
+                starts_at: step.starts_at,
+                card_bg: step.card_bg || step.home_art || step.away_art,
+                live,
+                past: false,
+                meta: [
+                  team ? `Zebra ${shortTeamName(team)}` : null,
+                  step.odd_futgreen ? `Odd ${Number(step.odd_futgreen).toFixed(2)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+              };
+            }),
+        );
+
+      const available = [...protegerOpen, ...jornadaOpen].sort(
+        (a, b) => new Date(a.starts_at || 0) - new Date(b.starts_at || 0),
+      );
+
+      if (available.length) {
+        mountRail(available, { title: 'Eventos disponíveis', mode: 'open' });
+        return;
+      }
+
+      const recentProteger = groupProteger(finishedMatches)
+        .sort((a, b) => new Date(b.starts_at || 0) - new Date(a.starts_at || 0))
+        .slice(0, 8)
+        .map((ev) => ({
+          kind: 'proteger',
+          kindLabel: 'Proteger',
+          href: '/app-proteger.html',
+          home_team: ev.home_team,
+          away_team: ev.away_team,
+          home_logo: ev.home_logo,
+          away_logo: ev.away_logo,
+          starts_at: ev.starts_at,
+          card_bg: ev.card_bg,
+          live: false,
+          past: true,
+          meta: [ev.league, fmtWhen(ev.starts_at)].filter(Boolean).join(' · '),
+        }));
+
+      const recentJornada = (desafioData.desafios || [])
+        .flatMap(({ desafio, steps }) =>
+          (steps || [])
+            .filter((s) => s.status === 'done' || kickoffPassed(s.starts_at, now))
+            .map((step) => ({
+              kind: 'jornada',
+              kindLabel: 'Jornada',
+              href: '/app-desafio.html',
+              home_team: step.home_team,
+              away_team: step.away_team,
+              home_logo: step.home_logo,
+              away_logo: step.away_logo,
+              starts_at: step.starts_at,
+              card_bg: step.card_bg || step.home_art || step.away_art,
+              live: false,
+              past: true,
+              meta: [desafio?.title, fmtWhen(step.starts_at)].filter(Boolean).join(' · '),
+            })),
+        )
+        .sort((a, b) => new Date(b.starts_at || 0) - new Date(a.starts_at || 0))
+        .slice(0, 8);
+
+      const recent = [...recentProteger, ...recentJornada]
+        .sort((a, b) => new Date(b.starts_at || 0) - new Date(a.starts_at || 0))
+        .slice(0, 12);
+
+      mountRail(recent, { title: 'Últimos eventos', mode: 'recent' });
+    }
+
+    await loadEventRail();
+  </script>
+</body>
+</html>

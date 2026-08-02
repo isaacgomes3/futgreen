@@ -18,12 +18,13 @@
         <h2>Movimentar</h2>
         <div class="fg-grid">
           <form id="transfer" class="fg-form fg-match">
-            <h3 style="margin:0;font-family:var(--font-display)">Reembolso → Desafio</h3>
+            <h3 style="margin:0;font-family:var(--font-display)">Reembolso → Jornada</h3>
             <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
             <button class="fg-btn" type="submit">Transferir</button>
           </form>
           <form id="withdraw" class="fg-form fg-match">
             <h3 style="margin:0;font-family:var(--font-display)">Saque Saldo Reembolso</h3>
+            <p class="fg-meta" style="margin:0">O valor fica reservado até o admin aprovar o pagamento.</p>
             <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
             <label>Chave PIX <input name="pix_key" type="text" placeholder="email ou CPF" /></label>
             <button class="fg-btn ghost" type="submit">Solicitar saque</button>
@@ -33,7 +34,7 @@
             <label>Destino
               <select name="dest">
                 <option value="apostador">Saldo Apostador</option>
-                <option value="desafio">Carteira Desafio</option>
+                <option value="desafio">Carteira Jornada</option>
                 <option value="provedor">Saldo Provedor</option>
               </select>
             </label>
@@ -62,7 +63,7 @@
       const amount = Number(new FormData(e.target).get('amount'));
       try {
         await api('/api/futgreen/transfer-desafio', { method: 'POST', body: { amount } });
-        toast('Transferido para Carteira Desafio');
+        toast('Transferido para Carteira Jornada');
         location.reload();
       } catch (err) {
         toast(err.message);
@@ -77,7 +78,7 @@
           method: 'POST',
           body: { amount: Number(fd.get('amount')), pix_key: fd.get('pix_key') },
         });
-        toast('Saque solicitado');
+        toast('Solicitação enviada — aguarda aprovação do admin');
         location.reload();
       } catch (err) {
         toast(err.message);

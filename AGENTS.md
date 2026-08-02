@@ -2,7 +2,7 @@
 
 ## protection-flow-lock
 
-Ao descrever ou alterar **proteção**, citar somente `stake_lock_v1` / contrato v10.  
+Ao descrever ou alterar **proteção**, citar somente `stake_lock_v1` / contrato v13.  
 Detalhe: `docs/PROTECTION_FLOW_LOCKED.md` · código: `scripts/lib/protection-flow-contract.mjs`.
 
 ## system-non-regression

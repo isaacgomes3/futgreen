@@ -1,16 +1,34 @@
 /**
- * protection-flow-contract-v10
- * Modelo travado: stake_lock_v1
- * Runtime: protection-runtime-stake-lock-v10
+ * protection-flow-contract-v13
+ * Modelo: stake_lock_v1 (indicação Proteger — sem trava de carteira)
+ * Runtime: protection-runtime-stake-lock-v13
+ *
+ * Entrada: NÃO move Saldo Apostador / NÃO credita Travado.
+ * O valor informado é a stake/responsabilidade usada na BetBra.
+ *
+ * Economia da indicação (GANHO na BetBra):
+ * - Lucro bruto LAY = responsabilidade / (odd−1)
+ * - Lucro bruto BACK = stake × (odd−1)
+ * - Cliente: 1% da stake/responsabilidade (não do lucro bruto)
+ * - Exchange: 2,5% do lucro bruto
+ * - FutGreen: lucro bruto − cliente − exchange — NÃO debitado do Apostador
+ *
+ * REEMBOLSO (indicação falhou): credita stake integral no Saldo Reembolso
+ * ANULA / GANHO: sem movimento de carteira
  *
  * Alterar regras exige pedido explícito do dono + bump de versão.
  */
 
-export const PROTECTION_CONTRACT_VERSION = 'protection-flow-contract-v10';
-export const PROTECTION_RUNTIME = 'protection-runtime-stake-lock-v10';
+export const PROTECTION_CONTRACT_VERSION = 'protection-flow-contract-v13';
+export const PROTECTION_RUNTIME = 'protection-runtime-stake-lock-v13';
 export const CREATE_PROTECTION_MODEL = 'stake_lock_v1';
-export const EXCHANGE_COMMISSION = 0.045;
+/** Comissão BetBra / exchange sobre o lucro bruto */
+export const EXCHANGE_COMMISSION = 0.025;
+/** Parcela do cliente sobre a stake/responsabilidade */
+export const CLIENT_PROFIT_SHARE = 0.01;
 export const MAX_STAKE_RATIO = 0.5;
+/** v12: ativação não trava carteira */
+export const LOCKS_STAKE_ON_CREATE = false;
 
 export const PROTECTION_OUTCOMES = Object.freeze({
   REEMBOLSO: 'reembolso',
@@ -19,43 +37,66 @@ export const PROTECTION_OUTCOMES = Object.freeze({
   CANCELAR: 'cancelar',
 });
 
-/**
- * Dedução LAY (responsabilidade) com comissão exchange 4,5% embutida.
- * Fórmula v10: fee = R × (1−c)² / odd
- * Vetor de referência: 1000@10 → R$ 91,20 (doc ilustra ~91,11)
- */
-export function lockedLayDeductionReais(liabilityReais, odd, commission = EXCHANGE_COMMISSION) {
-  const R = Number(liabilityReais);
-  const o = Number(odd);
-  const c = Number(commission);
-  if (!(R > 0) || !(o > 1)) throw new Error('liability/odd inválidos');
-  return Math.round(((R * (1 - c) * (1 - c)) / o) * 100) / 100;
+function round2(n) {
+  return Math.round(Number(n) * 100) / 100;
 }
 
 /**
- * Dedução quando resultado = GANHO (cliente ganhou na exchange).
- * Comissão 4,5% já embutida — não debitar de novo.
- * LAY = responsabilidade · BACK = stake
+ * Lucro bruto na exchange (antes de taxas), em R$.
+ * LAY: amount = responsabilidade · BACK: amount = stake
  */
-export function calcProtectionDeductionCents({ side, amountCents, odd, commission = EXCHANGE_COMMISSION }) {
+export function calcGrossProfitReais({ side, amountReais, odd }) {
   const o = Number(odd);
-  const amount = Number(amountCents);
-  if (!Number.isFinite(o) || o <= 1 || !Number.isFinite(amount) || amount <= 0) {
-    throw new Error('odd/amount inválidos para dedução');
-  }
-
+  const a = Number(amountReais);
+  if (!(o > 1) || !(a > 0)) throw new Error('amount/odd inválidos para lucro bruto');
   const sideU = String(side || 'LAY').toUpperCase();
-  let feeReais;
-
   if (sideU === 'LAY') {
-    feeReais = lockedLayDeductionReais(amount / 100, o, commission);
-  } else {
-    const stake = amount / 100;
-    const c = commission;
-    feeReais = Math.round(stake * ((o - 1) / o) * (c / (1 - c)) * 100) / 100;
+    return round2(a / (o - 1));
   }
+  return round2(a * (o - 1));
+}
 
-  return Math.round(feeReais * 100);
+/**
+ * Split da indicação vitoriosa (preview + meta de liquidação).
+ * walletDeductionCents = 0 — ganho na BetBra não debita Apostador.
+ */
+export function calcIndicationEconomics({ side, amountCents, odd }) {
+  const amountReais = Number(amountCents) / 100;
+  const gross = calcGrossProfitReais({ side, amountReais, odd });
+  // 1% sobre stake/responsabilidade (não sobre o lucro bruto)
+  const client = round2(amountReais * CLIENT_PROFIT_SHARE);
+  const exchange = round2(gross * EXCHANGE_COMMISSION);
+  const futgreen = round2(Math.max(0, gross - client - exchange));
+  return {
+    side: String(side || 'LAY').toUpperCase(),
+    odd: Number(odd),
+    amount_reais: round2(amountReais),
+    amount_kind: String(side || '').toUpperCase() === 'BACK' ? 'stake' : 'liability',
+    gross_profit_reais: gross,
+    client_share_reais: client,
+    exchange_fee_reais: exchange,
+    futgreen_share_reais: futgreen,
+    client_share_pct: CLIENT_PROFIT_SHARE,
+    client_share_base: 'stake_or_liability',
+    exchange_fee_pct: EXCHANGE_COMMISSION,
+    wallet_deduction_cents: 0,
+  };
+}
+
+/** @deprecated — alias informativo do share FutGreen em LAY */
+export function lockedLayDeductionReais(liabilityReais, odd) {
+  const eco = calcIndicationEconomics({
+    side: 'LAY',
+    amountCents: Math.round(Number(liabilityReais) * 100),
+    odd,
+  });
+  return eco.futgreen_share_reais;
+}
+
+/** Dedução em carteira no GANHO (v12 = sempre 0). */
+export function calcProtectionDeductionCents({ side, amountCents, odd }) {
+  calcIndicationEconomics({ side, amountCents, odd });
+  return 0;
 }
 
 export function resolveCanonicalOdd(protection) {
@@ -92,6 +133,9 @@ export function protectionHealthPayload() {
     createProtectionModel: CREATE_PROTECTION_MODEL,
     contractVersion: PROTECTION_CONTRACT_VERSION,
     exchangeCommission: EXCHANGE_COMMISSION,
+    clientProfitShare: CLIENT_PROFIT_SHARE,
     maxStakeRatio: MAX_STAKE_RATIO,
+    ganhoWalletDeduction: false,
+    locksStakeOnCreate: LOCKS_STAKE_ON_CREATE,
   };
 }

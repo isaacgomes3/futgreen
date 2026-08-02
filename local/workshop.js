@@ -12,13 +12,14 @@ const LABELS = {
   '/': 'Início',
   '/app-proteger.html': 'Proteger',
   '/app-protecoes.html': 'Minhas Proteções',
-  '/app-desafio.html': 'Desafio',
+  '/app-desafio.html': 'Jornada',
   '/app-desafio-jornada.html': 'Jornada',
   '/app-carteira.html': 'Carteira',
   '/admin-jogos.html': 'Jogos',
   '/admin-desafios.html': 'Desafios',
   '/admin-monitoring-desafios.html': 'Monitor Desafios',
   '/admin-monitoring-protections.html': 'Monitor Proteções',
+  '/admin-financeiro.html': 'Financeiro',
   '/admin-manual-deposits.html': 'Depósitos',
   '/admin-users.html': 'Usuários',
   '/admin-transactions.html': 'Extrato',
@@ -106,8 +107,7 @@ async function refreshWallet() {
     walletChips.innerHTML = `
       <span class="fg-chip">Apostador <strong>${brl(wallet.balance_cents)}</strong></span>
       <span class="fg-chip">Reembolso <strong>${brl(wallet.deduction_balance_cents)}</strong></span>
-      <span class="fg-chip">Travado <strong>${brl(wallet.locked_balance_cents)}</strong></span>
-      <span class="fg-chip">Desafio <strong>${brl(wallet.desafio_balance_cents)}</strong></span>
+      <span class="fg-chip">Jornada <strong>${brl(wallet.desafio_balance_cents)}</strong></span>
     `;
   } catch {
     walletChips.innerHTML = '';

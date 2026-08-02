@@ -1,11 +1,10 @@
 import { api, brl, fmtWhen } from './api.js';
 
-/** Labels e extrato detalhado — nunca "Saldo Dedução" */
+/** Labels e extrato detalhado — nunca "Saldo Dedução"; Travado fora da UI */
 export const BUCKET_LABELS = {
   balance_cents: 'Saldo Apostador',
   deduction_balance_cents: 'Saldo Reembolso',
-  locked_balance_cents: 'Saldo Travado',
-  desafio_balance_cents: 'Carteira Desafio',
+  desafio_balance_cents: 'Carteira Jornada',
   investor_balance_cents: 'Saldo Provedor',
   demo_balance_cents: 'Demo',
 };
@@ -44,7 +43,6 @@ export async function renderWalletCards(container) {
   const order = [
     'balance_cents',
     'deduction_balance_cents',
-    'locked_balance_cents',
     'desafio_balance_cents',
     'investor_balance_cents',
     'demo_balance_cents',

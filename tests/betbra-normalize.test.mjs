@@ -1,6 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePreliveEvent, parseEventTeams, extractMatchOdds } from '../scripts/lib/betbra-client.mjs';
+import {
+  normalizePreliveEvent,
+  normalizeEventDetail,
+  parseEventTeams,
+  extractMatchOdds,
+  extractAllMarkets,
+  marketToMatchFields,
+  pickMarketsByIds,
+  selectionToMatchFields,
+  resolveCartSelections,
+} from '../scripts/lib/betbra-client.mjs';
 
 const sample = {
   id: 'ev1',
@@ -16,6 +26,7 @@ const sample = {
     {
       id: 'm1',
       name: 'Match Odds',
+      'market-type': 'one_x_two',
       volume: 5000,
       runners: [
         {
@@ -44,6 +55,30 @@ const sample = {
         },
       ],
     },
+    {
+      id: 'm2',
+      name: 'Total',
+      'name-original': 'Total',
+      'market-type': 'total',
+      handicap: 2.5,
+      volume: 1200,
+      runners: [
+        {
+          name: 'Over 2.5',
+          prices: [
+            { side: 'back', odds: 1.85 },
+            { side: 'lay', odds: 1.9 },
+          ],
+        },
+        {
+          name: 'Under 2.5',
+          prices: [
+            { side: 'back', odds: 2.05 },
+            { side: 'lay', odds: 2.12 },
+          ],
+        },
+      ],
+    },
   ],
 };
 
@@ -65,4 +100,44 @@ test('normalizePreliveEvent sugere zebra no underdog', () => {
   assert.equal(ev.desafio_hint.bet_team_side, 'away');
   assert.equal(ev.desafio_hint.odd_futgreen, 3.6);
   assert.equal(ev.desafio_hint.odd_casa, 2.1);
+});
+
+test('extractAllMarkets lista back e lay de todos os mercados', () => {
+  const markets = extractAllMarkets(sample);
+  assert.equal(markets.length, 2);
+  assert.equal(markets[1].name, 'Total 2.5');
+  assert.equal(markets[1].runners[0].back_odd, 1.85);
+  assert.equal(markets[1].runners[0].lay_odd, 1.9);
+  assert.equal(markets[1].runners[1].back_odd, 2.05);
+});
+
+test('normalizeEventDetail inclui markets_count', () => {
+  const ev = normalizeEventDetail(sample);
+  assert.equal(ev.markets_count, 2);
+  assert.equal(ev.markets[0].runners.length, 3);
+});
+
+test('pickMarketsByIds e marketToMatchFields', () => {
+  const detail = normalizeEventDetail(sample);
+  const picked = pickMarketsByIds(detail, ['m2']);
+  assert.equal(picked.length, 1);
+  const fields = marketToMatchFields(detail, picked[0]);
+  assert.equal(fields.market_id, 'm2');
+  assert.equal(fields.market_name, 'Total 2.5');
+  assert.equal(fields.odds_snapshot.runners[0].back, 1.85);
+  assert.match(fields.exchange_url, /market\/m2/);
+});
+
+test('carrinho resolve odds back/lay independentes', () => {
+  const detail = normalizeEventDetail(sample);
+  const resolved = resolveCartSelections(detail, [
+    { market_id: 'm1', runner_name: 'Flamengo', side: 'BACK', odd: 2.1 },
+    { market_id: 'm1', runner_name: 'Draw', side: 'LAY' },
+  ]);
+  assert.equal(resolved.length, 2);
+  assert.equal(resolved[1].selection.odd, 3.3);
+  const fields = selectionToMatchFields(detail, resolved[0].market, resolved[0].selection);
+  assert.equal(fields.side, 'BACK');
+  assert.equal(fields.selection_name, 'Flamengo');
+  assert.match(fields.label, /Match Odds · Flamengo BACK/);
 });

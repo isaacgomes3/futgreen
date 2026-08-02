@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Financeiro · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Financeiro</h2>
+        <p class="lead">Monitor, depósitos, reembolso, despesas, áreas e tesouraria.</p>
+        <div class="fg-tabs" id="tabs" role="tablist">
+          <button type="button" class="fg-tab is-on" data-tab="monitor">Monitor</button>
+          <button type="button" class="fg-tab" data-tab="depositos">Depósitos</button>
+          <button type="button" class="fg-tab" data-tab="reembolso">Reembolso</button>
+          <button type="button" class="fg-tab" data-tab="despesas">Despesas</button>
+          <button type="button" class="fg-tab" data-tab="areas">Áreas</button>
+          <button type="button" class="fg-tab" data-tab="tesouraria">Tesouraria</button>
+        </div>
+      </section>
+
+      <section class="fg-section fg-tab-panel" data-panel="monitor">
+        <div class="fg-mon-hist-head">
+          <h3 class="fg-mon-title">Cruzamento do dia</h3>
+          <form id="mon-day-form" class="fg-mon-day-form">
+            <label>Dia <input type="date" name="day" required /></label>
+            <button class="fg-btn" type="submit">Atualizar</button>
+          </form>
+        </div>
+        <div id="mon-kpis" class="fg-fin-kpis"></div>
+        <div id="mon-areas" class="fg-fin-area-grid"></div>
+        <div id="mon-lines" class="fg-table-wrap" style="margin-top:1rem"></div>
+      </section>
+
+      <section class="fg-section fg-tab-panel" data-panel="depositos" hidden>
+        <h3 class="fg-mon-title">Pendentes</h3>
+        <div id="dep-pending" class="fg-mon-stack"></div>
+        <h3 class="fg-mon-title" style="margin-top:1.25rem">Histórico</h3>
+        <div id="dep-hist" class="fg-table-wrap"></div>
+      </section>
+
+      <section class="fg-section fg-tab-panel" data-panel="reembolso" hidden>
+        <h3 class="fg-mon-title">Saques pendentes</h3>
+        <div id="wd-pending" class="fg-mon-stack"></div>
+        <h3 class="fg-mon-title" style="margin-top:1.25rem">Histórico de saques</h3>
+        <div id="wd-hist" class="fg-table-wrap"></div>
+      </section>
+
+      <section class="fg-section fg-tab-panel" data-panel="despesas" hidden>
+        <form id="exp-form" class="fg-form fg-match" style="margin-bottom:1rem">
+          <h3 style="margin:0;font-family:var(--font-display)">Nova despesa</h3>
+          <label>Tipo
+            <select name="kind">
+              <option value="variable">Variável</option>
+              <option value="fixed">Fixa</option>
+            </select>
+          </label>
+          <label>Título <input name="title" required /></label>
+          <label>Valor (R$) <input name="amount" type="number" min="0.01" step="0.01" required /></label>
+          <label>Categoria <input name="category" value="geral" /></label>
+          <label class="exp-fixed-only" hidden>Dia vencimento (1–28) <input name="due_day" type="number" min="1" max="28" /></label>
+          <label class="exp-fixed-only" hidden>Alertar (dias antes) <input name="alert_days" type="number" min="0" value="3" /></label>
+          <label><input name="mark_paid" type="checkbox" /> Já paga</label>
+          <button class="fg-btn" type="submit">Cadastrar</button>
+        </form>
+        <div id="exp-alerts" class="fg-mon-stack"></div>
+        <div id="exp-list" class="fg-table-wrap"></div>
+      </section>
+
+      <section class="fg-section fg-tab-panel" data-panel="areas" hidden>
+        <form id="area-form" class="fg-form fg-match" style="margin-bottom:1rem">
+          <h3 style="margin:0;font-family:var(--font-display)">Lançamento manual</h3>
+          <label>Área
+            <select name="area">
+              <option value="protection">Proteção</option>
+              <option value="desafio">Desafio</option>
+              <option value="automation">Automação</option>
+              <option value="products">Venda de produtos</option>
+            </select>
+          </label>
+          <label>Direção
+            <select name="direction">
+              <option value="in">Entrada</option>
+              <option value="out">Saída</option>
+            </select>
+          </label>
+          <label>Valor (R$) <input name="amount" type="number" min="0.01" step="0.01" required /></label>
+          <label>Descrição <input name="label" placeholder="Ex.: receita mensal" /></label>
+          <button class="fg-btn" type="submit">Lançar</button>
+        </form>
+        <div id="area-panels" class="fg-fin-area-grid"></div>
+        <div id="area-entries" class="fg-table-wrap" style="margin-top:1rem"></div>
+      </section>
+
+      <section class="fg-section fg-tab-panel" data-panel="tesouraria" hidden>
+        <div id="treas-kpis" class="fg-fin-kpis"></div>
+        <form id="treas-form" class="fg-form fg-match" style="margin:1rem 0">
+          <h3 style="margin:0;font-family:var(--font-display)">Lançamento</h3>
+          <label>Tipo
+            <select name="kind">
+              <option value="withdrawal">Retirada</option>
+              <option value="external_payment">Pagamento externo</option>
+              <option value="adjustment">Ajuste</option>
+            </select>
+          </label>
+          <label>Valor (R$) <input name="amount" type="number" min="0.01" step="0.01" required /></label>
+          <label>Contraparte <input name="counterparty" /></label>
+          <label>Nota <input name="note" /></label>
+          <button class="fg-btn" type="submit">Registrar</button>
+        </form>
+        <div id="treas-moves" class="fg-table-wrap"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, toast, brl, fmtWhen } from '/public/js/api.js';
+
+    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
+      localStorage.setItem('fg_email', 'admin@futgreen.local');
+    }
+    await mountShell({ admin: true });
+
+    const params = new URLSearchParams(location.search);
+    let usersById = {};
+
+    function showTab(id) {
+      document.querySelectorAll('.fg-tab').forEach((b) => b.classList.toggle('is-on', b.dataset.tab === id));
+      document.querySelectorAll('.fg-tab-panel').forEach((p) => {
+        p.hidden = p.dataset.panel !== id;
+      });
+      const url = new URL(location.href);
+      url.searchParams.set('tab', id);
+      history.replaceState(null, '', url);
+    }
+
+    document.getElementById('tabs').onclick = (e) => {
+      const btn = e.target.closest('[data-tab]');
+      if (!btn) return;
+      showTab(btn.dataset.tab);
+    };
+    showTab(params.get('tab') || 'monitor');
+
+    function kpiCards(items) {
+      return items
+        .map(
+          ([label, cents, tone]) => `
+        <div class="fg-fin-kpi ${tone || ''}">
+          <span>${label}</span>
+          <strong>${brl(cents || 0)}</strong>
+        </div>`,
+        )
+        .join('');
+    }
+
+    async function loadUsers() {
+      const { users } = await api('/api/futgreen/users', { admin: true });
+      usersById = Object.fromEntries(users.map((u) => [u.id, u]));
+    }
+
+    async function loadMonitor() {
+      const day = document.querySelector('#mon-day-form [name=day]').value;
+      const q = day ? `?day=${encodeURIComponent(day)}` : '';
+      const data = await api(`/api/futgreen/financeiro/monitor${q}`, { admin: true });
+      if (!document.querySelector('#mon-day-form [name=day]').value) {
+        document.querySelector('#mon-day-form [name=day]').value = data.day;
+      }
+      document.getElementById('mon-kpis').innerHTML = kpiCards([
+        ['Entradas (dia)', data.daily.entradas_cents, 'is-in'],
+        ['Saídas (dia)', data.daily.saidas_cents, 'is-out'],
+        ['Saldo do dia', data.daily.saldo_cents, ''],
+        ['Entradas (total)', data.totals.entradas_cents, 'is-in'],
+        ['Saídas (total)', data.totals.saidas_cents, 'is-out'],
+        ['Disponível retirada', data.treasury.disponivel_retirada_cents, 'is-lime'],
+      ]);
+      document.getElementById('mon-areas').innerHTML = (data.areas || [])
+        .map(
+          (a) => `
+        <article class="mdz-card">
+          <div class="mdz-card-top"><span>${a.label}</span><span>dia</span></div>
+          <div class="fg-meta">In ${brl(a.in_day_cents)} · Out ${brl(a.out_day_cents)}</div>
+          <strong style="font-family:var(--font-display);font-size:1.2rem">${brl(a.net_day_cents)}</strong>
+          <div class="fg-meta">Total líquido ${brl(a.net_total_cents)}</div>
+        </article>`,
+        )
+        .join('');
+      const lines = data.day_lines || [];
+      document.getElementById('mon-lines').innerHTML = !lines.length
+        ? '<p class="fg-empty">Sem movimentos neste dia.</p>'
+        : `<table class="fg-table"><thead><tr><th>Quando</th><th>Tipo</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>
+          ${lines
+            .map(
+              (l) => `<tr>
+              <td>${fmtWhen(l.at)}</td>
+              <td>${l.kind === 'in' ? 'Entrada' : l.kind === 'out' ? 'Saída' : 'Ajuste'}</td>
+              <td>${l.label}${l.user_id && usersById[l.user_id] ? ` · ${usersById[l.user_id].email}` : ''}</td>
+              <td>${l.kind === 'out' ? '−' : '+'}${brl(l.amount_cents)}</td>
+            </tr>`,
+            )
+            .join('')}
+        </tbody></table>`;
+    }
+
+    async function loadDeposits() {
+      const { deposits } = await api('/api/futgreen/manual-deposits', { admin: true });
+      const pending = deposits.filter((d) => d.status === 'pending');
+      const hist = [...deposits].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      document.getElementById('dep-pending').innerHTML = !pending.length
+        ? '<p class="fg-empty">Nenhum depósito pendente.</p>'
+        : pending
+            .map((d) => {
+              const u = usersById[d.user_id];
+              return `
+              <article class="mdz-card" data-id="${d.id}">
+                <div class="mdz-card-top"><span>${u?.email || d.user_id}</span><span>${fmtWhen(d.created_at)}</span></div>
+                <div class="mdz-card-game">${brl(d.amount_cents)}</div>
+                <div class="fg-meta">Destino: ${d.dest || 'apostador'}${d.note ? ` · ${d.note}` : ''}${d.proof_ref ? ` · ref ${d.proof_ref}` : ''}</div>
+                <div class="mdz-card-foot">
+                  <button class="fg-btn" data-act="credit">Aprovar</button>
+                  <button class="fg-btn ghost" data-act="mark">Já creditado</button>
+                  <button class="fg-btn danger" data-act="reject">Rejeitar</button>
+                </div>
+              </article>`;
+            })
+            .join('');
+      document.getElementById('dep-pending').querySelectorAll('[data-act]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.closest('[data-id]').dataset.id;
+          try {
+            if (btn.dataset.act === 'reject') {
+              await api('/api/futgreen/manual-deposits/reject', {
+                method: 'POST',
+                admin: true,
+                body: { deposit_id: id },
+              });
+              toast('Depósito rejeitado');
+            } else {
+              await api('/api/futgreen/approveManualDeposit', {
+                method: 'POST',
+                admin: true,
+                body: { deposit_id: id, mark_only: btn.dataset.act === 'mark' },
+              });
+              toast(btn.dataset.act === 'mark' ? 'Marcado como já creditado' : 'Depósito aprovado');
+            }
+            await loadDeposits();
+            await loadMonitor();
+          } catch (e) {
+            toast(e.message);
+          }
+        };
+      });
+      document.getElementById('dep-hist').innerHTML = !hist.length
+        ? '<p class="fg-empty">Sem depósitos.</p>'
+        : `<table class="fg-table"><thead><tr>
+            <th>ID</th><th>Usuário</th><th>Valor</th><th>Destino</th><th>Status</th><th>Criado</th><th>Decisão</th><th>Por</th><th>Nota</th>
+          </tr></thead><tbody>
+          ${hist
+            .map((d) => {
+              const u = usersById[d.user_id];
+              return `<tr>
+                <td>${d.id}</td>
+                <td>${u?.email || d.user_id}<div class="fg-meta" style="margin:0">${u?.name || ''}</div></td>
+                <td>${brl(d.amount_cents)}</td>
+                <td>${d.dest || '—'}</td>
+                <td><span class="fg-status ${d.status}">${d.status}</span></td>
+                <td>${fmtWhen(d.created_at)}</td>
+                <td>${fmtWhen(d.approved_at || d.rejected_at) || '—'}</td>
+                <td>${d.approved_by || d.rejected_by || '—'}</td>
+                <td>${d.note || d.proof_ref || '—'}</td>
+              </tr>`;
+            })
+            .join('')}
+          </tbody></table>`;
+    }
+
+    async function loadWithdrawals() {
+      const { withdrawals, pending } = await api('/api/futgreen/withdrawals', { admin: true });
+      document.getElementById('wd-pending').innerHTML = !pending?.length
+        ? '<p class="fg-empty">Nenhum saque pendente.</p>'
+        : pending
+            .map(
+              (w) => `
+            <article class="mdz-card" data-id="${w.id}">
+              <div class="mdz-card-top"><span>${w.user_email}</span><span>${fmtWhen(w.created_at)}</span></div>
+              <div class="mdz-card-game">${brl(w.amount_cents)}</div>
+              <div class="fg-meta">PIX: ${w.pix_key || '—'}</div>
+              <div class="mdz-card-foot">
+                <button class="fg-btn" data-act="paid">Aprovar / Pagar</button>
+                <button class="fg-btn danger" data-act="reject">Rejeitar</button>
+              </div>
+            </article>`,
+            )
+            .join('');
+      document.getElementById('wd-pending').querySelectorAll('[data-act]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api('/api/futgreen/withdrawals/decide', {
+              method: 'POST',
+              admin: true,
+              body: { withdrawal_id: btn.closest('[data-id]').dataset.id, action: btn.dataset.act },
+            });
+            toast(btn.dataset.act === 'reject' ? 'Saque rejeitado — saldo devolvido' : 'Saque marcado como pago');
+            await loadWithdrawals();
+            await loadMonitor();
+          } catch (e) {
+            toast(e.message);
+          }
+        };
+      });
+      const hist = withdrawals || [];
+      document.getElementById('wd-hist').innerHTML = !hist.length
+        ? '<p class="fg-empty">Sem saques.</p>'
+        : `<table class="fg-table"><thead><tr>
+            <th>Cliente</th><th>Valor</th><th>PIX</th><th>Status</th><th>Pedido</th><th>Decisão</th><th>Por</th>
+          </tr></thead><tbody>
+          ${hist
+            .map(
+              (w) => `<tr>
+              <td>${w.user_email}</td>
+              <td>${brl(w.amount_cents)}</td>
+              <td>${w.pix_key || '—'}</td>
+              <td><span class="fg-status ${w.status}">${w.status}</span></td>
+              <td>${fmtWhen(w.created_at)}</td>
+              <td>${fmtWhen(w.decided_at) || '—'}</td>
+              <td>${w.decided_by || '—'}</td>
+            </tr>`,
+            )
+            .join('')}
+          </tbody></table>`;
+    }
+
+    async function loadExpenses() {
+      const { expenses } = await api('/api/futgreen/expenses', { admin: true });
+      const alerts = expenses.filter((e) => e.alert);
+      document.getElementById('exp-alerts').innerHTML = !alerts.length
+        ? ''
+        : alerts
+            .map(
+              (e) => `
+            <article class="mdz-card is-pending">
+              <div class="mdz-card-top"><span>Alerta vencimento</span><span>${e.alert.overdue ? 'VENCIDO' : `${e.alert.days_left}d`}</span></div>
+              <div class="mdz-card-game">${e.title}</div>
+              <div class="fg-meta">${brl(e.amount_cents)} · ${fmtWhen(e.alert.due_at)}</div>
+              <div class="mdz-card-foot">
+                <button class="fg-btn" data-pay="${e.id}">Marcar pago</button>
+              </div>
+            </article>`,
+            )
+            .join('');
+      document.getElementById('exp-alerts').querySelectorAll('[data-pay]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api('/api/futgreen/expenses', {
+              method: 'POST',
+              admin: true,
+              body: { id: btn.dataset.pay, mark_paid: true },
+            });
+            toast('Despesa paga');
+            await loadExpenses();
+            await loadMonitor();
+          } catch (e) {
+            toast(e.message);
+          }
+        };
+      });
+      document.getElementById('exp-list').innerHTML = !expenses.length
+        ? '<p class="fg-empty">Nenhuma despesa.</p>'
+        : `<table class="fg-table"><thead><tr>
+            <th>Título</th><th>Tipo</th><th>Valor</th><th>Categoria</th><th>Venc.</th><th>Status</th><th></th>
+          </tr></thead><tbody>
+          ${expenses
+            .map(
+              (e) => `<tr>
+              <td>${e.title}${e.alert ? ' ⚠' : ''}</td>
+              <td>${e.kind}</td>
+              <td>${brl(e.amount_cents)}</td>
+              <td>${e.category || '—'}</td>
+              <td>${e.due_day != null ? `dia ${e.due_day}` : fmtWhen(e.due_at) || '—'}</td>
+              <td>${e.paid_at ? `Pago ${fmtWhen(e.paid_at)}` : e.active ? 'Aberta' : 'Inativa'}</td>
+              <td>${!e.paid_at ? `<button class="fg-btn ghost fg-btn-sm" data-pay="${e.id}">Pagar</button>` : ''}</td>
+            </tr>`,
+            )
+            .join('')}
+          </tbody></table>`;
+      document.getElementById('exp-list').querySelectorAll('[data-pay]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api('/api/futgreen/expenses', {
+              method: 'POST',
+              admin: true,
+              body: { id: btn.dataset.pay, mark_paid: true },
+            });
+            toast('Despesa paga');
+            await loadExpenses();
+            await loadMonitor();
+          } catch (e) {
+            toast(e.message);
+          }
+        };
+      });
+    }
+
+    const expForm = document.getElementById('exp-form');
+    expForm.kind.onchange = () => {
+      const fixed = expForm.kind.value === 'fixed';
+      expForm.querySelectorAll('.exp-fixed-only').forEach((el) => {
+        el.hidden = !fixed;
+      });
+    };
+    expForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(expForm);
+      try {
+        await api('/api/futgreen/expenses', {
+          method: 'POST',
+          admin: true,
+          body: {
+            kind: fd.get('kind'),
+            title: fd.get('title'),
+            amount: Number(fd.get('amount')),
+            category: fd.get('category'),
+            due_day: fd.get('due_day') || null,
+            alert_days: fd.get('alert_days') || 3,
+            mark_paid: fd.get('mark_paid') === 'on',
+          },
+        });
+        toast('Despesa cadastrada');
+        expForm.reset();
+        expForm.kind.onchange();
+        await loadExpenses();
+        await loadMonitor();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    async function loadAreas() {
+      const mon = await api('/api/futgreen/financeiro/monitor', { admin: true });
+      const { entries } = await api('/api/futgreen/area-entries', { admin: true });
+      document.getElementById('area-panels').innerHTML = (mon.areas || [])
+        .map(
+          (a) => `
+        <article class="mdz-card">
+          <div class="mdz-card-game">${a.label}</div>
+          <div class="fg-meta">Entradas ${brl(a.in_total_cents)}</div>
+          <div class="fg-meta">Saídas ${brl(a.out_total_cents)}</div>
+          <strong>${brl(a.net_total_cents)}</strong>
+        </article>`,
+        )
+        .join('');
+      document.getElementById('area-entries').innerHTML = !entries?.length
+        ? '<p class="fg-empty">Sem lançamentos manuais.</p>'
+        : `<table class="fg-table"><thead><tr><th>Quando</th><th>Área</th><th>Dir</th><th>Valor</th><th>Label</th><th>Por</th></tr></thead><tbody>
+          ${entries
+            .map(
+              (e) => `<tr>
+              <td>${fmtWhen(e.created_at)}</td>
+              <td>${e.area}</td>
+              <td>${e.direction}</td>
+              <td>${brl(e.amount_cents)}</td>
+              <td>${e.label}</td>
+              <td>${e.created_by || '—'}</td>
+            </tr>`,
+            )
+            .join('')}
+          </tbody></table>`;
+    }
+
+    document.getElementById('area-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        await api('/api/futgreen/area-entries', {
+          method: 'POST',
+          admin: true,
+          body: {
+            area: fd.get('area'),
+            direction: fd.get('direction'),
+            amount: Number(fd.get('amount')),
+            label: fd.get('label'),
+          },
+        });
+        toast('Lançamento registrado');
+        e.target.reset();
+        await loadAreas();
+        await loadMonitor();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    async function loadTreasury() {
+      const data = await api('/api/futgreen/treasury', { admin: true });
+      document.getElementById('treas-kpis').innerHTML =
+        kpiCards([
+          ['Caixa bruto', data.caixa_bruto_cents, ''],
+          ['Passivo clientes', data.passivo_clientes_cents, 'is-out'],
+          ['Disponível retirada', data.disponivel_retirada_cents, 'is-lime'],
+        ]) +
+        (data.note ? `<p class="fg-meta" style="grid-column:1/-1;margin:0">${data.note}</p>` : '');
+      const moves = data.moves || [];
+      document.getElementById('treas-moves').innerHTML = !moves.length
+        ? '<p class="fg-empty">Sem movimentos de tesouraria.</p>'
+        : `<table class="fg-table"><thead><tr><th>Quando</th><th>Tipo</th><th>Valor</th><th>Contraparte</th><th>Nota</th><th>Por</th></tr></thead><tbody>
+          ${moves
+            .map(
+              (m) => `<tr>
+              <td>${fmtWhen(m.created_at)}</td>
+              <td>${m.kind}</td>
+              <td>${brl(m.amount_cents)}</td>
+              <td>${m.counterparty || '—'}</td>
+              <td>${m.note || '—'}</td>
+              <td>${m.created_by || '—'}</td>
+            </tr>`,
+            )
+            .join('')}
+          </tbody></table>`;
+    }
+
+    document.getElementById('treas-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        await api('/api/futgreen/treasury/moves', {
+          method: 'POST',
+          admin: true,
+          body: {
+            kind: fd.get('kind'),
+            amount: Number(fd.get('amount')),
+            counterparty: fd.get('counterparty'),
+            note: fd.get('note'),
+          },
+        });
+        toast('Movimento registrado');
+        e.target.reset();
+        await loadTreasury();
+        await loadMonitor();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    document.getElementById('mon-day-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await loadMonitor();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    try {
+      await loadUsers();
+      await Promise.all([loadMonitor(), loadDeposits(), loadWithdrawals(), loadExpenses(), loadAreas(), loadTreasury()]);
+    } catch (e) {
+      toast(e.message);
+    }
+  </script>
+</body>
+</html>

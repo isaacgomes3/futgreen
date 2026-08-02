@@ -28,6 +28,70 @@ function teamCell(name, logo) {
   return `<div style="display:flex;align-items:center;gap:0.45rem;min-width:0"><span style="flex-shrink:0">${img}</span><strong style="font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name || '—'}</strong></div>`;
 }
 
+function fmtOdd(v) {
+  if (v == null || Number.isNaN(Number(v))) return '—';
+  return Number(v).toFixed(2);
+}
+
+function cartKey(marketId, runnerName, side) {
+  return `${marketId}|${runnerName}|${side}`;
+}
+
+function oddBtn(side, odd, marketId, runnerName, runnerId) {
+  const v = fmtOdd(odd);
+  if (v === '—') {
+    return `<span class="fg-odd-cell is-empty fg-odd-${side}">—</span>`;
+  }
+  const key = cartKey(marketId, runnerName, side.toUpperCase());
+  return `<button type="button" class="fg-odd-cell fg-odd-${side}" data-act="odd"
+    data-key="${key}" data-market-id="${marketId}" data-runner="${runnerName}"
+    data-runner-id="${runnerId ?? ''}" data-side="${side.toUpperCase()}" data-odd="${odd}"
+    title="Adicionar ${side.toUpperCase()} ${v} ao carrinho">${v}</button>`;
+}
+
+function renderMarketsHtml(markets, { pickOdds = false } = {}) {
+  if (!markets?.length) {
+    return `<p class="fg-empty" style="padding:0.75rem 0">Nenhum mercado disponível neste evento.</p>`;
+  }
+  return markets
+    .map((m, i) => {
+      const mid = m.id != null ? String(m.id) : `idx-${i}`;
+      const rows = (m.runners || [])
+        .map((r) => {
+          const name = r.name || '—';
+          const back = pickOdds ? oddBtn('back', r.back_odd, mid, name, r.id) : `<span class="fg-odd-back">${fmtOdd(r.back_odd)}</span>`;
+          const lay = pickOdds ? oddBtn('lay', r.lay_odd, mid, name, r.id) : `<span class="fg-odd-lay">${fmtOdd(r.lay_odd)}</span>`;
+          return `
+          <div class="fg-mkt-row">
+            <span class="fg-mkt-runner">${name}</span>
+            ${back}
+            ${lay}
+          </div>`;
+        })
+        .join('');
+      return `
+        <section class="fg-mkt" data-mkt-id="${mid}" data-mkt-idx="${i}">
+          <div class="fg-mkt-head">
+            <div class="fg-mkt-title">
+              <strong>${m.name || 'Mercado'}</strong>
+              ${m.market_type ? `<span class="fg-meta" style="margin:0 0 0 0.4rem">${m.market_type}</span>` : ''}
+            </div>
+            <div class="fg-mkt-head-right">
+              <span class="fg-meta" style="margin:0">Vol ${brl((m.volume || 0) * 100)}</span>
+              ${m.exchange_url ? `<a class="fg-mkt-link" href="${m.exchange_url}" target="_blank" rel="noopener" data-act="ext">BetBra</a>` : ''}
+            </div>
+          </div>
+          <div class="fg-mkt-cols">
+            <span>Selection</span>
+            <span class="fg-odd-back">Back</span>
+            <span class="fg-odd-lay">Lay</span>
+          </div>
+          ${rows || `<p class="fg-meta" style="margin:0.35rem 0 0">Sem selections</p>`}
+        </section>`;
+    })
+    .join('');
+}
+
 /**
  * Radar BetBra embutido no admin.
  * @param {HTMLElement} container
@@ -41,7 +105,7 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
           <div class="fg-betbra-logo-plate">${BETBRA_ICON.replace('width="22" height="22"', 'width="36" height="36"')}</div>
           <div>
             <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Radar BetBra</h3>
-            <p class="fg-meta" style="margin:0.2rem 0 0">Prelive Mexchange · logos TheSportsDB</p>
+            <p class="fg-meta" style="margin:0.2rem 0 0">Prelive Mexchange · clique no evento para ver mercados</p>
           </div>
         </div>
         <div style="display:flex;gap:0.45rem;flex-wrap:wrap;align-items:center">
@@ -65,6 +129,229 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
   const status = container.querySelector('#bb-status');
   const list = container.querySelector('#bb-list');
   const hoursEl = container.querySelector('#bb-hours');
+  let listEvents = [];
+
+  async function importEvent(event, publish, btn, { marketIds = null, selections = null } = {}) {
+    if (btn) btn.disabled = true;
+    try {
+      const body = { dest, event, publish };
+      if (selections?.length) body.selections = selections;
+      else if (marketIds?.length) body.market_ids = marketIds;
+      const res = await api('/api/futgreen/prelive-import', {
+        method: 'POST',
+        admin: true,
+        body,
+      });
+      const n = res.count || res.matches?.length || 1;
+      if (dest === 'desafio') toast('Desafio importado da BetBra');
+      else if (selections?.length) toast(n > 1 ? `${n} odds lançadas` : 'Odd lançada');
+      else if (n > 1) toast(`${n} mercados lançados`);
+      else toast(marketIds?.length ? 'Mercado lançado' : 'Jogo importado da BetBra');
+      onImported?.(res);
+      return res;
+    } catch (e) {
+      toast(e.message);
+      return null;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function bindImportButtons(root, event) {
+    root.querySelectorAll('[data-act="draft"], [data-act="publish"]').forEach((btn) => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        importEvent(event, btn.dataset.act === 'publish', btn);
+      };
+    });
+  }
+
+  async function openEventMarkets(listEv) {
+    const id = listEv.external_id;
+    if (!id) {
+      toast('Evento sem id BetBra');
+      return;
+    }
+    status.textContent = `Carregando mercados · ${listEv.home_team} × ${listEv.away_team}…`;
+    list.innerHTML = `<p class="fg-empty">Buscando todos os mercados (back / lay)…</p>`;
+    try {
+      const data = await api(`/api/futgreen/prelive-event/${encodeURIComponent(id)}?logos=1`, { admin: true });
+      const ev = { ...listEv, ...(data.event || {}) };
+      const markets = data.markets || ev.markets || [];
+      /** @type {Map<string, {key:string, market_id:string, market_name:string, runner_name:string, runner_id:string|null, side:string, odd:number}>} */
+      const cart = new Map();
+
+      const canPickOdds = dest === 'proteger';
+      status.textContent = canPickOdds
+        ? `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd (back/lay)`
+        : `${markets.length} mercados · ${ev.home_team} × ${ev.away_team}`;
+      list.innerHTML = `
+        <article class="mdz-card fg-event-detail" style="padding:0.85rem 0.2rem">
+          <div class="mdz-card-top">
+            <span>${ev.league || 'Futebol'}${ev.in_running ? ' · LIVE' : ''}</span>
+            <span>${fmtWhen(ev.starts_at)}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0.5rem;align-items:center;margin:0.45rem 0">
+            ${teamCell(ev.home_team, ev.home_logo || listEv.home_logo)}
+            <span class="fg-vs">×</span>
+            ${teamCell(ev.away_team, ev.away_logo || listEv.away_logo)}
+          </div>
+          <div class="fg-meta" style="margin-bottom:0.55rem">
+            Vol evento ${brl((ev.volume || 0) * 100)}
+            ${canPickOdds ? ' · cada odd back/lay é independente · carrinho abaixo' : ''}
+          </div>
+          <div id="bb-cart" class="fg-cart" hidden>
+            <div class="fg-cart-head">
+              <strong>Carrinho</strong>
+              <span id="bb-cart-count" class="fg-meta" style="margin:0"></span>
+            </div>
+            <div id="bb-cart-items" class="fg-cart-items"></div>
+            <div class="mdz-card-foot fg-mkt-actions" style="margin-top:0.65rem">
+              <button type="button" class="fg-btn ghost" data-act="clear">Limpar</button>
+              <button type="button" class="fg-btn" data-act="draft-sel" disabled>Lançar rascunho</button>
+              <button type="button" class="fg-btn secondary" data-act="publish-sel" disabled>Lançar e publicar</button>
+            </div>
+          </div>
+          <div class="mdz-card-foot fg-mkt-actions" style="margin-bottom:0.85rem">
+            <button type="button" class="fg-btn ghost" data-act="back">← Voltar</button>
+            ${
+              canPickOdds
+                ? ''
+                : `
+            <button type="button" class="fg-btn" data-act="draft">Importar rascunho</button>
+            <button type="button" class="fg-btn secondary" data-act="publish">Importar e publicar</button>`
+            }
+            ${betbraOpenBtn(ev.exchange_url || listEv.exchange_url)}
+          </div>
+          <div class="fg-mkt-list">
+            ${renderMarketsHtml(markets, { pickOdds: canPickOdds })}
+          </div>
+        </article>`;
+
+      const detail = list.querySelector('.fg-event-detail');
+      detail.querySelector('[data-act="back"]').onclick = () => load();
+
+      if (!canPickOdds) {
+        bindImportButtons(detail, listEv);
+      } else {
+        const cartEl = detail.querySelector('#bb-cart');
+        const cartItems = detail.querySelector('#bb-cart-items');
+        const cartCount = detail.querySelector('#bb-cart-count');
+        const btnDraft = detail.querySelector('[data-act="draft-sel"]');
+        const btnPub = detail.querySelector('[data-act="publish-sel"]');
+        const btnClear = detail.querySelector('[data-act="clear"]');
+        const marketNameById = Object.fromEntries(
+          markets.map((m, i) => [m.id != null ? String(m.id) : `idx-${i}`, m.name || 'Mercado']),
+        );
+
+        function cartSelections() {
+          return [...cart.values()].map((x) => ({
+            market_id: x.market_id,
+            runner_name: x.runner_name,
+            runner_id: x.runner_id,
+            side: x.side,
+            odd: x.odd,
+          }));
+        }
+
+        function syncCartUi() {
+          const items = [...cart.values()];
+          const n = items.length;
+          detail.querySelectorAll('[data-act="odd"]').forEach((btn) => {
+            btn.classList.toggle('is-in-cart', cart.has(btn.dataset.key));
+          });
+          btnDraft.disabled = n === 0;
+          btnPub.disabled = n === 0;
+          cartEl.hidden = n === 0;
+          cartCount.textContent = n ? `${n} odd${n > 1 ? 's' : ''}` : '';
+          btnDraft.textContent = n <= 1 ? 'Lançar rascunho' : `Lançar ${n} rascunhos`;
+          btnPub.textContent = n <= 1 ? 'Lançar e publicar' : `Publicar ${n} odds`;
+          cartItems.innerHTML = items
+            .map(
+              (x) => `
+              <div class="fg-cart-item" data-key="${x.key}">
+                <span class="fg-cart-item-main">
+                  <span class="fg-cart-side ${x.side === 'LAY' ? 'is-lay' : 'is-back'}">${x.side}</span>
+                  <strong>${x.odd.toFixed(2)}</strong>
+                  <span class="fg-meta" style="margin:0">${x.runner_name} · ${x.market_name}</span>
+                </span>
+                <button type="button" class="fg-cart-remove" data-act="remove" data-key="${x.key}" title="Retirar">×</button>
+              </div>`,
+            )
+            .join('');
+          cartItems.querySelectorAll('[data-act="remove"]').forEach((btn) => {
+            btn.onclick = () => {
+              cart.delete(btn.dataset.key);
+              syncCartUi();
+            };
+          });
+          status.textContent = n
+            ? `Carrinho: ${n} odd${n > 1 ? 's' : ''} · ${ev.home_team} × ${ev.away_team}`
+            : `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd (back/lay)`;
+        }
+
+        function toggleOdd(btn) {
+          const mid = btn.dataset.marketId;
+          if (!mid || mid.startsWith('idx-')) {
+            toast('Mercado sem id — não dá para importar');
+            return;
+          }
+          const key = btn.dataset.key;
+          if (cart.has(key)) {
+            cart.delete(key);
+          } else {
+            cart.set(key, {
+              key,
+              market_id: mid,
+              market_name: marketNameById[mid] || 'Mercado',
+              runner_name: btn.dataset.runner,
+              runner_id: btn.dataset.runnerId || null,
+              side: btn.dataset.side,
+              odd: Number(btn.dataset.odd),
+            });
+          }
+          syncCartUi();
+          cartEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        btnClear.onclick = () => {
+          cart.clear();
+          syncCartUi();
+        };
+        btnDraft.onclick = async () => {
+          const sels = cartSelections();
+          if (!sels.length) return toast('Selecione ao menos uma odd');
+          const res = await importEvent(listEv, false, btnDraft, { selections: sels });
+          if (res) {
+            cart.clear();
+            syncCartUi();
+          }
+        };
+        btnPub.onclick = async () => {
+          const sels = cartSelections();
+          if (!sels.length) return toast('Selecione ao menos uma odd');
+          const res = await importEvent(listEv, true, btnPub, { selections: sels });
+          if (res) {
+            cart.clear();
+            syncCartUi();
+          }
+        };
+
+        detail.querySelectorAll('[data-act="odd"]').forEach((btn) => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            toggleOdd(btn);
+          };
+        });
+      }
+    } catch (e) {
+      status.textContent = `Falha ao carregar mercados: ${e.message}`;
+      list.innerHTML = `
+        <p class="fg-empty">${e.message}</p>
+        <button type="button" class="fg-btn ghost" id="bb-back-fail">← Voltar ao radar</button>`;
+      list.querySelector('#bb-back-fail').onclick = () => load();
+    }
+  }
 
   async function load() {
     status.textContent = 'Consultando BetBra…';
@@ -72,19 +359,19 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
     try {
       const hours = hoursEl.value;
       const data = await api(`/api/futgreen/prelive-events?hours=${hours}&logos=1`, { admin: true });
-      const events = data.events || [];
-      status.textContent = `${events.length} eventos · fonte ${data.source}${data.fetched_at ? ` · ${fmtWhen(data.fetched_at)}` : ''}`;
-      if (!events.length) {
+      listEvents = data.events || [];
+      status.textContent = `${listEvents.length} eventos · fonte ${data.source}${data.fetched_at ? ` · ${fmtWhen(data.fetched_at)}` : ''} · clique para mercados`;
+      if (!listEvents.length) {
         list.innerHTML = `<p class="fg-empty">${data.error || 'Nenhum prelive no período.'}</p>`;
         return;
       }
 
-      list.innerHTML = events
+      list.innerHTML = listEvents
         .map((ev, i) => {
           const o = ev.odds || {};
           const hint = ev.desafio_hint || {};
           return `
-          <article class="mdz-card" data-idx="${i}" style="padding:0.85rem 0.2rem">
+          <article class="mdz-card fg-radar-event" data-idx="${i}" style="padding:0.85rem 0.2rem;cursor:pointer" title="Ver todos os mercados">
             <div class="mdz-card-top">
               <span>${ev.league || 'Futebol'}${ev.in_running ? ' · LIVE' : ''}</span>
               <span>${fmtWhen(ev.starts_at)}</span>
@@ -99,8 +386,10 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
               H ${o.home_back ?? '—'} / ${o.home_lay ?? '—'} ·
               A ${o.away_back ?? '—'} / ${o.away_lay ?? '—'}
               ${dest === 'desafio' && hint.odd_futgreen ? ` · zebra ${hint.bet_team_side} @ ${hint.odd_futgreen}` : ''}
+              <span class="fg-radar-hint"> · ver mercados</span>
             </div>
             <div class="mdz-card-foot">
+              <button type="button" class="fg-btn ghost" data-act="markets">Ver mercados</button>
               <button type="button" class="fg-btn" data-act="draft">Importar rascunho</button>
               <button type="button" class="fg-btn secondary" data-act="publish">Importar e publicar</button>
               ${betbraOpenBtn(ev.exchange_url)}
@@ -109,29 +398,18 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
         })
         .join('');
 
-      list.querySelectorAll('[data-act]').forEach((btn) => {
-        btn.onclick = async () => {
-          const idx = Number(btn.closest('[data-idx]').dataset.idx);
-          const event = events[idx];
-          btn.disabled = true;
-          try {
-            const res = await api('/api/futgreen/prelive-import', {
-              method: 'POST',
-              admin: true,
-              body: {
-                dest,
-                event,
-                publish: btn.dataset.act === 'publish',
-              },
-            });
-            toast(dest === 'desafio' ? 'Desafio importado da BetBra' : 'Jogo importado da BetBra');
-            onImported?.(res);
-          } catch (e) {
-            toast(e.message);
-          } finally {
-            btn.disabled = false;
-          }
+      list.querySelectorAll('.fg-radar-event').forEach((card) => {
+        const idx = Number(card.dataset.idx);
+        const event = listEvents[idx];
+        card.onclick = (e) => {
+          if (e.target.closest('[data-act], a')) return;
+          openEventMarkets(event);
         };
+        card.querySelector('[data-act="markets"]').onclick = (e) => {
+          e.stopPropagation();
+          openEventMarkets(event);
+        };
+        bindImportButtons(card, event);
       });
     } catch (e) {
       status.textContent = `Falha BetBra: ${e.message}`;

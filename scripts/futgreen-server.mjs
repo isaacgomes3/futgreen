@@ -8,7 +8,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStore } from './lib/store.mjs';
-import { protectionHealthPayload } from './lib/protection-flow-contract.mjs';
+import {
+  protectionHealthPayload,
+  calcIndicationEconomics,
+} from './lib/protection-flow-contract.mjs';
 import { assertTransferAllowed, labelForTxType, labelForBucket } from './lib/wallet-buckets-contract.mjs';
 import { parseAllowedAdminEmails, isAdminEmail } from './lib/admin-ops-contract.mjs';
 import { createProtection } from './lib/create-protection.mjs';
@@ -30,15 +33,54 @@ import {
   injectLivereload,
   watchForReload,
 } from './lib/livereload.mjs';
-import { fetchPreliveEvents, getEvent, normalizePreliveEvent } from './lib/betbra-client.mjs';
+import {
+  fetchPreliveEvents,
+  getEvent,
+  getEventWithAllMarkets,
+  normalizePreliveEvent,
+  normalizeEventDetail,
+  marketToMatchFields,
+  pickMarketsByIds,
+  selectionToMatchFields,
+  resolveCartSelections,
+} from './lib/betbra-client.mjs';
 import {
   searchFootballTeams,
   enrichEventLogos,
   enrichEventsLogos,
   resolveTeamLogo,
+  isBadgeImageUrl,
   loadDiskCache,
   saveDiskCache,
 } from './lib/football-teams.mjs';
+import {
+  deriveMatchPhase,
+  touchMatchLiveState,
+  isSameDayBrazil,
+  dayKeyBrazil,
+} from './lib/match-phase.mjs';
+import {
+  hashPassword,
+  verifyPassword,
+  assertAuthPayload,
+  normalizeEmail,
+  isUserActive,
+} from './lib/auth.mjs';
+import { emptyWallet } from './lib/wallet-buckets-contract.mjs';
+import {
+  requestDeductionWithdraw,
+  decideWithdrawal,
+  createExpense,
+  updateExpense,
+  expenseAlert,
+  createAreaEntry,
+  createTreasuryMove,
+  buildFinanceMonitor,
+  rejectManualDeposit,
+  FINANCE_AREAS,
+  ensureCollections,
+} from './lib/financeiro-ops.mjs';
+import { ensureLocalSeedPasswords, LOCAL_DEV_PASSWORD } from './lib/local-auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -58,6 +100,8 @@ try {
 } catch { /* ignore */ }
 
 const PORT = Number(process.env.PORT || 3101);
+/** Em produção, só localhost (nginx faz SSL). Evita http://domínio:3101 “Não seguro”. */
+const LISTEN_HOST = process.env.LISTEN_HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : undefined);
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const IS_LOCAL = livereloadEnabled();
 const ALLOWED_ADMINS = parseAllowedAdminEmails(
@@ -184,27 +228,87 @@ async function handleApi(req, res, url) {
   // —— Matches / proteção ——
   if (p === '/api/futgreen/matches' && method === 'GET') {
     const all = url.searchParams.get('all') === '1';
-    const rows = store.data.matches.filter((m) => (all ? true : m.is_published && !m.settled_at));
+    const now = Date.now();
+    /** Indicação lançada pelo admin (publicada com mercado/lado/odd). */
+    const isAdminLaunch = (m) => {
+      if (!m?.is_published && !m?.published_at) return false;
+      const side = String(m.side || '').toUpperCase();
+      const odd = Number(m.odd);
+      return (side === 'BACK' || side === 'LAY') && Number.isFinite(odd) && odd > 1;
+    };
+
+    const rows = store.data.matches.filter((m) => {
+      if (all) return true;
+      if (!isAdminLaunch(m)) return false;
+      // Fila ativa (ainda não encerrada)
+      if (!m.settled_at && !m.finished_at) return true;
+      // Finalizados do dia (estiveram na fila do cliente)
+      return (
+        isSameDayBrazil(m.starts_at, now) ||
+        isSameDayBrazil(m.settled_at || m.finished_at, now)
+      );
+    });
     let changed = false;
-    for (const m of rows) {
-      if (!m.home_logo || !m.away_logo) {
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const m = rows[i];
+      const needsArt = !m.card_bg || isBadgeImageUrl(m.card_bg);
+      if (!m.home_logo || !m.away_logo || needsArt) {
         try {
-          if (!m.home_logo) {
-            m.home_logo = await resolveTeamLogo(m.home_team);
+          const enriched = await enrichEventLogos(m);
+          if (enriched.home_logo && enriched.home_logo !== m.home_logo) {
+            m.home_logo = enriched.home_logo;
             changed = true;
           }
-          if (!m.away_logo) {
-            m.away_logo = await resolveTeamLogo(m.away_team);
+          if (enriched.away_logo && enriched.away_logo !== m.away_logo) {
+            m.away_logo = enriched.away_logo;
             changed = true;
           }
+          if (enriched.home_art && enriched.home_art !== m.home_art) {
+            m.home_art = enriched.home_art;
+            changed = true;
+          }
+          if (enriched.away_art && enriched.away_art !== m.away_art) {
+            m.away_art = enriched.away_art;
+            changed = true;
+          }
+          if (enriched.card_bg && enriched.card_bg !== m.card_bg) {
+            m.card_bg = enriched.card_bg;
+            m.card_bg_team = enriched.card_bg_team;
+            changed = true;
+          }
+          // Nunca persistir escudo como fundo
+          if (m.card_bg && isBadgeImageUrl(m.card_bg)) {
+            m.card_bg = null;
+            m.card_bg_team = null;
+            changed = true;
+          }
+          rows[i] = m;
         } catch { /* opcional */ }
       }
+      const touched = touchMatchLiveState(m, now);
+      if (touched.changed) changed = true;
+      out.push({
+        ...m,
+        match_phase: touched.phase.phase,
+        match_clock: touched.phase.clock,
+        match_badge: touched.phase.badge,
+        match_live: touched.phase.live,
+        match_finished: touched.phase.finished,
+        display_home_score: touched.phase.home_score,
+        display_away_score: touched.phase.away_score,
+      });
     }
     if (changed) {
       saveDiskCache(DATA_DIR);
       store.save();
     }
-    return send(res, 200, { matches: rows });
+    if (all) {
+      return send(res, 200, { matches: out });
+    }
+    const available = out.filter((m) => !m.settled_at && !m.finished_at && !m.match_finished);
+    const finished = out.filter((m) => m.settled_at || m.finished_at || m.match_finished);
+    return send(res, 200, { matches: available, finished });
   }
 
   if (p === '/api/futgreen/matches' && method === 'POST') {
@@ -259,6 +363,63 @@ async function handleApi(req, res, url) {
     return send(res, 200, { match: m });
   }
 
+  if (p === '/api/futgreen/match-live-odd' && method === 'GET') {
+    const matchId = url.searchParams.get('match_id') || url.searchParams.get('id');
+    const m = store.data.matches.find((x) => x.id === matchId);
+    if (!m) return send(res, 404, { error: 'Jogo não encontrado' });
+    if (!m.is_published || m.settled_at) {
+      return send(res, 400, { error: 'Indicação indisponível' });
+    }
+    const side = String(m.side || 'LAY').toUpperCase();
+    let odd = m.odd != null ? Number(m.odd) : null;
+    let source = 'snapshot';
+    try {
+      if (m.external_id && m.market_id) {
+        const full = await getEventWithAllMarkets(m.external_id, 3);
+        const detail = normalizeEventDetail(full);
+        const market = (detail.markets || []).find((x) => String(x.id) === String(m.market_id));
+        const runner = (market?.runners || []).find(
+          (r) => String(r.name) === String(m.selection_name),
+        );
+        const live = side === 'LAY' ? runner?.lay_odd : runner?.back_odd;
+        if (live != null && Number(live) > 1) {
+          odd = Number(live);
+          source = 'betbra_live';
+          m.odd = odd;
+          m.label = `${m.market_name || 'Mercado'} · ${m.selection_name || ''} ${side} @ ${odd}`.replace(
+            /\s+/g,
+            ' ',
+          ).trim();
+          store.save();
+        }
+      }
+    } catch {
+      /* mantém snapshot */
+    }
+    return send(res, 200, {
+      match_id: m.id,
+      side,
+      odd,
+      selection_name: m.selection_name || null,
+      market_name: m.market_name || null,
+      label: m.label || null,
+      source,
+      fetched_at: new Date().toISOString(),
+    });
+  }
+
+  if (p === '/api/futgreen/protection-preview' && method === 'GET') {
+    try {
+      const side = String(url.searchParams.get('side') || 'LAY').toUpperCase();
+      const odd = Number(url.searchParams.get('odd'));
+      const amount = Math.round(Number(url.searchParams.get('amount_cents') || Number(url.searchParams.get('amount')) * 100));
+      const economics = calcIndicationEconomics({ side, amountCents: amount, odd });
+      return send(res, 200, { economics });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+
   if (p === '/api/futgreen/football-teams' && method === 'GET') {
     try {
       const q = url.searchParams.get('q') || '';
@@ -284,12 +445,56 @@ async function handleApi(req, res, url) {
     }
   }
 
+  {
+    const detailMatch = p.match(/^\/api\/futgreen\/prelive-event\/([^/]+)$/);
+    if (detailMatch && method === 'GET') {
+      requireAdmin(ctx);
+      try {
+        const eventId = decodeURIComponent(detailMatch[1]);
+        const full = await getEventWithAllMarkets(eventId, Number(url.searchParams.get('depth') || 3));
+        let event = normalizeEventDetail(full);
+        if (url.searchParams.get('logos') !== '0') {
+          event = await enrichEventLogos(event);
+          saveDiskCache(DATA_DIR);
+        }
+        const markets = event.markets || [];
+        const withOdds = markets.filter((m) =>
+          (m.runners || []).some((r) => r.back_odd != null || r.lay_odd != null),
+        ).length;
+        return send(res, 200, {
+          event,
+          markets,
+          markets_count: markets.length,
+          markets_with_odds: withOdds,
+          source: 'betbra',
+          fetched_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        return send(res, e.status || 502, { error: e.message, source: 'betbra', markets: [] });
+      }
+    }
+  }
+
   if (p === '/api/futgreen/prelive-import' && method === 'POST') {
     requireAdmin(ctx);
     try {
       let ev = body.event || null;
+      const selections = Array.isArray(body.selections) ? body.selections : [];
+      const marketIds = Array.isArray(body.market_ids)
+        ? body.market_ids.map(String).filter(Boolean)
+        : body.market_id
+          ? [String(body.market_id)]
+          : [];
+
+      let detail = null;
+      const eventId = ev?.external_id || body.external_id;
+      if (eventId && (selections.length || marketIds.length || !ev)) {
+        const full = await getEventWithAllMarkets(eventId);
+        detail = normalizeEventDetail(full);
+        ev = ev ? { ...detail, ...ev, odds: ev.odds || detail.odds } : detail;
+      }
       if (!ev && body.external_id) {
-        const full = await getEvent(body.external_id);
+        const full = await getEventWithAllMarkets(body.external_id);
         ev = normalizePreliveEvent(full);
       }
       if (!ev) return send(res, 400, { error: 'event ou external_id obrigatório' });
@@ -324,28 +529,88 @@ async function handleApi(req, res, url) {
         return send(res, 201, { kind: 'desafio', ...bundle, event: ev });
       }
 
-      const match = {
-        id: store.nextId('match'),
+      const publish = Boolean(body.publish);
+      const now = new Date().toISOString();
+      const baseMatch = {
         home_team: ev.home_team,
         away_team: ev.away_team,
         home_logo: ev.home_logo,
         away_logo: ev.away_logo,
         league: ev.league,
         starts_at: ev.starts_at,
-        is_published: Boolean(body.publish),
-        published_at: body.publish ? new Date().toISOString() : null,
+        is_published: publish,
+        published_at: publish ? now : null,
         home_score: null,
         away_score: null,
         source: 'betbra',
         external_id: ev.external_id,
+        created_at: now,
+        settled_at: null,
+      };
+
+      if (selections.length) {
+        const source = detail || normalizeEventDetail(await getEventWithAllMarkets(ev.external_id));
+        const resolved = resolveCartSelections(source, selections);
+        if (!resolved.length) {
+          return send(res, 400, { error: 'Nenhuma odd válida no carrinho' });
+        }
+        const matches = resolved.map(({ market, selection }) => {
+          const fields = selectionToMatchFields(ev, market, selection);
+          const match = {
+            id: store.nextId('match'),
+            ...baseMatch,
+            ...fields,
+          };
+          store.data.matches.push(match);
+          return match;
+        });
+        store.save();
+        return send(res, 201, {
+          kind: 'proteger',
+          matches,
+          match: matches[0],
+          count: matches.length,
+          event: ev,
+        });
+      }
+
+      if (marketIds.length) {
+        const source = detail || normalizeEventDetail(await getEventWithAllMarkets(ev.external_id));
+        const picked = pickMarketsByIds(source, marketIds);
+        if (!picked.length) {
+          return send(res, 400, { error: 'Nenhum mercado válido nos market_ids' });
+        }
+        const matches = picked.map((mkt) => {
+          const fields = marketToMatchFields(ev, mkt);
+          const match = {
+            id: store.nextId('match'),
+            ...baseMatch,
+            ...fields,
+          };
+          store.data.matches.push(match);
+          return match;
+        });
+        store.save();
+        return send(res, 201, {
+          kind: 'proteger',
+          matches,
+          match: matches[0],
+          count: matches.length,
+          event: ev,
+        });
+      }
+
+      const match = {
+        id: store.nextId('match'),
+        ...baseMatch,
+        market_id: ev.market_id || null,
+        market_name: 'Match Odds',
         exchange_url: ev.exchange_url,
         odds_snapshot: ev.odds,
-        created_at: new Date().toISOString(),
-        settled_at: null,
       };
       store.data.matches.push(match);
       store.save();
-      return send(res, 201, { kind: 'proteger', match, event: ev });
+      return send(res, 201, { kind: 'proteger', match, matches: [match], count: 1, event: ev });
     } catch (e) {
       return send(res, e.status || 502, { error: e.message });
     }
@@ -384,11 +649,48 @@ async function handleApi(req, res, url) {
     requireAdmin(ctx);
     const m = store.data.matches.find((x) => x.id === body.match_id);
     if (!m) return send(res, 404, { error: 'Jogo não encontrado' });
-    m.home_score = Number(body.home_score);
-    m.away_score = Number(body.away_score);
-    m.live = true;
+    if (body.home_score != null) m.home_score = Number(body.home_score);
+    if (body.away_score != null) m.away_score = Number(body.away_score);
+    if (body.minute != null && body.minute !== '') m.minute = Number(body.minute);
+    if (body.period != null) m.period = String(body.period);
+    if (body.finished) {
+      m.finished_at = new Date().toISOString();
+      m.live = false;
+    } else {
+      m.live = true;
+      if (m.finished_at) m.finished_at = null;
+    }
+    // Espelha placar em indicações do mesmo evento
+    const siblings = store.data.matches.filter(
+      (x) =>
+        x.id !== m.id &&
+        ((m.external_id && x.external_id === m.external_id) ||
+          (x.home_team === m.home_team &&
+            x.away_team === m.away_team &&
+            x.starts_at === m.starts_at)),
+    );
+    for (const s of siblings) {
+      s.home_score = m.home_score;
+      s.away_score = m.away_score;
+      s.minute = m.minute;
+      s.period = m.period;
+      s.live = m.live;
+      s.finished_at = m.finished_at || null;
+    }
     store.save();
-    return send(res, 200, { match: m });
+    const phase = deriveMatchPhase(m);
+    return send(res, 200, {
+      match: {
+        ...m,
+        match_phase: phase.phase,
+        match_clock: phase.clock,
+        match_badge: phase.badge,
+        match_live: phase.live,
+        match_finished: phase.finished,
+        display_home_score: phase.home_score,
+        display_away_score: phase.away_score,
+      },
+    });
   }
 
   if (p === '/api/futgreen/protection-close' && method === 'POST') {
@@ -427,7 +729,13 @@ async function handleApi(req, res, url) {
     const published = listPublishedDesafios(store).map((d) => getDesafioBundle(store, d.id));
     for (const b of published) await ensureStepsLogos(b?.steps);
     const unlocked = (ctx.user.wallet.desafio_balance_cents || 0) > 0;
-    return send(res, 200, { desafios: unlocked ? published : [], unlocked, wallet: ctx.user.wallet });
+    // preview=1: Visão Geral / discovery — lista publicados mesmo com carteira travada
+    const preview = url.searchParams.get('preview') === '1';
+    return send(res, 200, {
+      desafios: unlocked || preview ? published : [],
+      unlocked,
+      wallet: ctx.user.wallet,
+    });
   }
 
   if (p === '/api/futgreen/desafios' && method === 'POST') {
@@ -638,21 +946,20 @@ async function handleApi(req, res, url) {
   }
 
   if (p === '/api/futgreen/deduction-withdraw' && method === 'POST') {
-    const amount = Math.round(Number(body.amount_cents ?? Number(body.amount) * 100));
-    const u = store.getUser(ctx.user.id);
-    if ((u.wallet.deduction_balance_cents || 0) < amount || !(amount > 0)) {
-      return send(res, 400, { error: 'Saldo Reembolso insuficiente' });
+    try {
+      const result = requestDeductionWithdraw(store, {
+        userId: ctx.user.id,
+        amountCents: body.amount_cents ?? Number(body.amount) * 100,
+        pixKey: body.pix_key || null,
+      });
+      return send(res, 200, {
+        wallet: result.wallet,
+        withdrawal: result.withdrawal,
+        status: 'pending',
+      });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
     }
-    u.wallet.deduction_balance_cents -= amount;
-    store.addTx({
-      user_id: u.id,
-      type: 'deduction_withdraw',
-      amount_cents: amount,
-      bucket: 'deduction_balance_cents',
-      meta: { pix_key: body.pix_key || null },
-    });
-    store.save();
-    return send(res, 200, { wallet: u.wallet, status: 'requested' });
   }
 
   if (p === '/api/futgreen/dev/status' && method === 'GET') {
@@ -699,6 +1006,133 @@ async function handleApi(req, res, url) {
     return send(res, 200, { protections: store.data.protections });
   }
 
+  /** Monitor admin: eventos abertos / finalizados do dia / histórico por dia */
+  if (p === '/api/futgreen/protections/monitor' && method === 'GET') {
+    requireAdmin(ctx);
+    const dayParam = String(url.searchParams.get('day') || '').trim();
+    const todayKey = dayKeyBrazil(new Date());
+    const historyDay = /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : todayKey;
+    const usersById = Object.fromEntries(store.data.users.map((u) => [u.id, u]));
+
+    const eventKeyOf = (m) =>
+      m.external_id || `${m.home_team}|${m.away_team}|${m.starts_at}`;
+
+    const matchById = Object.fromEntries(store.data.matches.map((m) => [m.id, m]));
+
+    const buildClient = (prot) => {
+      const u = usersById[prot.user_id];
+      const m = matchById[prot.match_id];
+      return {
+        protection_id: prot.id,
+        user_id: prot.user_id,
+        user_email: u?.email || prot.user_id,
+        user_name: u?.name || null,
+        created_at: prot.created_at,
+        settled_at: prot.settled_at || null,
+        side: prot.side,
+        odd: prot.odd,
+        amount_cents: prot.amount_cents,
+        status: prot.status,
+        result: prot.result || null,
+        market_name: prot.metadata?.market_name || m?.market_name || null,
+        selection_name: prot.metadata?.selection_name || m?.selection_name || null,
+        match_id: prot.match_id,
+        exchange_url: m?.exchange_url || null,
+      };
+    };
+
+    const groupEvents = (matchList, { includeProtections = 'all' } = {}) => {
+      const byKey = new Map();
+      for (const m of matchList) {
+        const key = eventKeyOf(m);
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            key,
+            home_team: m.home_team,
+            away_team: m.away_team,
+            home_logo: m.home_logo,
+            away_logo: m.away_logo,
+            league: m.league,
+            starts_at: m.starts_at,
+            home_score: m.home_score,
+            away_score: m.away_score,
+            settled_at: m.settled_at || null,
+            finished_at: m.finished_at || null,
+            exchange_url: m.exchange_url || null,
+            external_id: m.external_id || null,
+            match_ids: [],
+            clients: [],
+          });
+        }
+        const g = byKey.get(key);
+        g.match_ids.push(m.id);
+        if (m.home_score != null) g.home_score = m.home_score;
+        if (m.away_score != null) g.away_score = m.away_score;
+        if (m.settled_at) g.settled_at = m.settled_at;
+        if (m.finished_at) g.finished_at = m.finished_at;
+        if (!g.exchange_url && m.exchange_url) g.exchange_url = m.exchange_url;
+      }
+      const matchIdSet = new Set([...byKey.values()].flatMap((e) => e.match_ids));
+      for (const prot of store.data.protections) {
+        if (!matchIdSet.has(prot.match_id)) continue;
+        if (includeProtections === 'active' && prot.status !== 'active') continue;
+        const m = matchById[prot.match_id];
+        if (!m) continue;
+        const g = byKey.get(eventKeyOf(m));
+        if (!g) continue;
+        g.clients.push(buildClient(prot));
+      }
+      for (const g of byKey.values()) {
+        g.clients.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        g.clients_count = g.clients.length;
+        g.volume_cents = g.clients.reduce((s, c) => s + (c.amount_cents || 0), 0);
+        const phase = deriveMatchPhase({
+          starts_at: g.starts_at,
+          home_score: g.home_score,
+          away_score: g.away_score,
+          settled_at: g.settled_at,
+          finished_at: g.finished_at,
+        });
+        g.match_phase = phase.phase;
+        g.match_finished = phase.finished;
+        g.display_home_score = phase.home_score;
+        g.display_away_score = phase.away_score;
+      }
+      return [...byKey.values()].sort(
+        (a, b) => new Date(a.starts_at || 0) - new Date(b.starts_at || 0),
+      );
+    };
+
+    const openMatches = store.data.matches.filter(
+      (m) => m.is_published && !m.settled_at && !m.finished_at,
+    );
+    const finishedTodayMatches = store.data.matches.filter((m) => {
+      if (!(m.settled_at || m.finished_at)) return false;
+      if (!(m.is_published || m.published_at || m.settled_at)) return false;
+      return (
+        isSameDayBrazil(m.starts_at) ||
+        isSameDayBrazil(m.settled_at || m.finished_at)
+      );
+    });
+    const historyMatches = store.data.matches.filter((m) => {
+      if (!(m.is_published || m.published_at || m.settled_at || m.finished_at)) return false;
+      const startDay = dayKeyBrazil(m.starts_at);
+      const endDay = dayKeyBrazil(m.settled_at || m.finished_at || m.starts_at);
+      if (startDay !== historyDay && endDay !== historyDay) return false;
+      // Hoje: só finalizados no histórico (abertos ficam em "Em andamento")
+      if (historyDay === todayKey) return Boolean(m.settled_at || m.finished_at);
+      return true;
+    });
+
+    return send(res, 200, {
+      day: historyDay,
+      today: todayKey,
+      open: groupEvents(openMatches, { includeProtections: 'active' }),
+      finished_today: groupEvents(finishedTodayMatches, { includeProtections: 'all' }),
+      history: groupEvents(historyMatches, { includeProtections: 'all' }),
+    });
+  }
+
   if (p === '/api/futgreen/deposit-proof' && method === 'POST') {
     const dep = {
       id: store.nextId('dep'),
@@ -706,6 +1140,8 @@ async function handleApi(req, res, url) {
       amount_cents: Math.round(Number(body.amount_cents ?? Number(body.amount) * 100)),
       dest: body.dest || 'apostador', // apostador | desafio | provedor
       status: 'pending',
+      note: body.note || null,
+      proof_ref: body.proof_ref || null,
       created_at: new Date().toISOString(),
     };
     store.data.manual_deposits.push(dep);
@@ -717,8 +1153,13 @@ async function handleApi(req, res, url) {
     requireAdmin(ctx);
     const dep = store.data.manual_deposits.find((d) => d.id === body.deposit_id);
     if (!dep) return send(res, 404, { error: 'Depósito não encontrado' });
+    if (dep.status !== 'pending') {
+      return send(res, 400, { error: 'Depósito não está pendente' });
+    }
     if (body.mark_only) {
       dep.status = 'already_credited';
+      dep.approved_by = ctx.adminEmail;
+      dep.approved_at = new Date().toISOString();
       store.save();
       return send(res, 200, { deposit: dep });
     }
@@ -740,6 +1181,126 @@ async function handleApi(req, res, url) {
     return send(res, 200, { deposit: dep, wallet: u.wallet });
   }
 
+  if (p === '/api/futgreen/manual-deposits/reject' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      const deposit = rejectManualDeposit(store, {
+        depositId: body.deposit_id || body.id,
+        adminEmail: ctx.adminEmail,
+        note: body.note,
+      });
+      return send(res, 200, { deposit });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  // —— Financeiro Admin ——
+  if (p === '/api/futgreen/financeiro/monitor' && method === 'GET') {
+    requireAdmin(ctx);
+    ensureCollections(store);
+    const day = url.searchParams.get('day') || undefined;
+    return send(res, 200, buildFinanceMonitor(store, { day }));
+  }
+
+  if (p === '/api/futgreen/withdrawals' && method === 'GET') {
+    requireAdmin(ctx);
+    ensureCollections(store);
+    const usersById = Object.fromEntries(store.data.users.map((u) => [u.id, u]));
+    const rows = store.data.withdrawals.map((w) => ({
+      ...w,
+      user_email: usersById[w.user_id]?.email || w.user_id,
+      user_name: usersById[w.user_id]?.name || null,
+    }));
+    return send(res, 200, {
+      withdrawals: rows,
+      pending: rows.filter((w) => w.status === 'pending' || w.status === 'approved'),
+    });
+  }
+
+  if (p === '/api/futgreen/withdrawals/decide' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      const result = decideWithdrawal(store, {
+        withdrawalId: body.withdrawal_id || body.id,
+        action: body.action,
+        adminEmail: ctx.adminEmail,
+        note: body.note,
+      });
+      return send(res, 200, result);
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  if (p === '/api/futgreen/expenses' && method === 'GET') {
+    requireAdmin(ctx);
+    ensureCollections(store);
+    const rows = store.data.expenses.map((e) => ({
+      ...e,
+      alert: expenseAlert(e),
+    }));
+    return send(res, 200, { expenses: rows });
+  }
+
+  if (p === '/api/futgreen/expenses' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      if (body.mode === 'update' || body.id) {
+        const expense = updateExpense(store, {
+          id: body.id || body.expense_id,
+          patch: body,
+          adminEmail: ctx.adminEmail,
+        });
+        return send(res, 200, { expense: { ...expense, alert: expenseAlert(expense) } });
+      }
+      const expense = createExpense(store, body, ctx.adminEmail);
+      return send(res, 201, { expense: { ...expense, alert: expenseAlert(expense) } });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  if (p === '/api/futgreen/area-entries' && method === 'GET') {
+    requireAdmin(ctx);
+    ensureCollections(store);
+    return send(res, 200, {
+      areas: FINANCE_AREAS,
+      entries: store.data.area_entries,
+    });
+  }
+
+  if (p === '/api/futgreen/area-entries' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      const entry = createAreaEntry(store, body, ctx.adminEmail);
+      return send(res, 201, { entry });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  if (p === '/api/futgreen/treasury' && method === 'GET') {
+    requireAdmin(ctx);
+    ensureCollections(store);
+    const mon = buildFinanceMonitor(store, {});
+    return send(res, 200, {
+      ...mon.treasury,
+      moves: store.data.treasury_moves,
+    });
+  }
+
+  if (p === '/api/futgreen/treasury/moves' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      const move = createTreasuryMove(store, body, ctx.adminEmail);
+      const mon = buildFinanceMonitor(store, {});
+      return send(res, 201, { move, treasury: mon.treasury });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
   if (p === '/api/futgreen/users' && method === 'GET') {
     requireAdmin(ctx);
     return send(res, 200, {
@@ -748,17 +1309,102 @@ async function handleApi(req, res, url) {
         email: u.email,
         name: u.name,
         role: u.role,
+        is_active: isUserActive(u),
+        created_at: u.created_at || null,
         wallet: u.wallet,
       })),
     });
   }
 
+  if (p === '/api/futgreen/users/set-active' && method === 'POST') {
+    requireAdmin(ctx);
+    const userId = body.user_id || body.id;
+    const user = store.getUser(userId) || store.getUserByEmail(body.email);
+    if (!user) return send(res, 404, { error: 'Usuário não encontrado' });
+    const next = body.is_active === false || body.active === false ? false : true;
+    user.is_active = next;
+    user.activated_at = next ? new Date().toISOString() : null;
+    user.activated_by = next ? ctx.adminEmail || ctx.user.email : null;
+    store.save();
+    return send(res, 200, {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        is_active: isUserActive(user),
+      },
+    });
+  }
+
   if (p === '/api/futgreen/me' && method === 'GET') {
     return send(res, 200, {
-      user: { id: ctx.user.id, email: ctx.user.email, name: ctx.user.name, role: ctx.user.role },
+      user: {
+        id: ctx.user.id,
+        email: ctx.user.email,
+        name: ctx.user.name,
+        role: ctx.user.role,
+        is_active: isUserActive(ctx.user),
+      },
       wallet: ctx.user.wallet,
       admin: Boolean(ctx.adminEmail),
       impersonating: ctx.impersonating,
+    });
+  }
+
+  if (p === '/api/futgreen/auth/register' && method === 'POST') {
+    const { email, password, name } = assertAuthPayload(body, { requireName: true });
+    if (store.getUserByEmail(email)) {
+      return send(res, 409, { error: 'Este e-mail já possui conta' });
+    }
+    const asAdmin = isAdminEmail(email, ALLOWED_ADMINS);
+    const user = store.upsertUser({
+      email,
+      name,
+      role: asAdmin ? 'admin' : 'client',
+      password_hash: await hashPassword(password),
+      wallet: emptyWallet(),
+      // Novos clientes ficam pendentes até o admin ativar
+      is_active: asAdmin,
+    });
+    return send(res, 201, {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        is_active: isUserActive(user),
+      },
+      pending_activation: !isUserActive(user),
+    });
+  }
+
+  if (p === '/api/futgreen/auth/login' && method === 'POST') {
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || '');
+    if (!email || !password) {
+      return send(res, 400, { error: 'Informe e-mail e senha' });
+    }
+    const user = store.getUserByEmail(email);
+    if (!user?.password_hash) {
+      return send(res, 401, { error: 'Credenciais inválidas' });
+    }
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) return send(res, 401, { error: 'Credenciais inválidas' });
+    if (!isUserActive(user)) {
+      return send(res, 403, {
+        error: 'Conta aguardando ativação pelo administrador',
+        code: 'account_pending',
+      });
+    }
+    return send(res, 200, {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        is_active: true,
+      },
     });
   }
 
@@ -771,7 +1417,21 @@ function settleMatch(res, ctx, body) {
   m.home_score = body.home_score != null ? Number(body.home_score) : m.home_score;
   m.away_score = body.away_score != null ? Number(body.away_score) : m.away_score;
   m.settled_at = new Date().toISOString();
+  m.finished_at = m.settled_at;
+  m.live = false;
   m.is_published = false;
+  // Espelha placar final no mesmo evento
+  for (const s of store.data.matches) {
+    if (s.id === m.id) continue;
+    const same =
+      (m.external_id && s.external_id === m.external_id) ||
+      (s.home_team === m.home_team && s.away_team === m.away_team && s.starts_at === m.starts_at);
+    if (!same) continue;
+    s.home_score = m.home_score;
+    s.away_score = m.away_score;
+    s.finished_at = m.finished_at;
+    s.live = false;
+  }
 
   const outcome = String(body.outcome || body.result || '').toLowerCase();
   const settled = [];
@@ -809,12 +1469,22 @@ function serveStatic(req, res, urlPath) {
 function streamFile(res, filePath) {
   const ext = path.extname(filePath);
   let data = fs.readFileSync(filePath);
-  if (ext === '.html' && IS_LOCAL) {
-    data = Buffer.from(injectLivereload(data.toString('utf8')), 'utf8');
+  if (ext === '.html') {
+    let html = data.toString('utf8');
+    if (IS_LOCAL) {
+      html = injectLivereload(html);
+    } else if (!html.includes('data-fg-force-https')) {
+      // Produção: se a página abrir em HTTP (cache/bookmark), sobe para HTTPS
+      html = html.replace(
+        /<head([^>]*)>/i,
+        '<head$1><script data-fg-force-https>if(location.protocol==="http:"&&/(^|\\.)futgreen\\.com\\.br$/i.test(location.hostname))location.replace("https://futgreen.com.br"+location.pathname+location.search+location.hash)</script>',
+      );
+    }
+    data = Buffer.from(html, 'utf8');
   }
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    ...(IS_LOCAL ? { 'Cache-Control': 'no-store' } : {}),
+    ...(IS_LOCAL ? { 'Cache-Control': 'no-store' } : { 'Cache-Control': 'no-cache' }),
   });
   res.end(data);
 }
@@ -855,12 +1525,29 @@ if (IS_LOCAL) {
   watchForReload(ROOT);
 }
 
-server.listen(PORT, () => {
-  console.log(`FutGreen listening on http://localhost:${PORT}`);
-  console.log(`Health: http://localhost:${PORT}/health`);
+async function boot() {
   if (IS_LOCAL) {
-    console.log(`Workshop: http://localhost:${PORT}/local/`);
-    console.log('Live reload: ON');
+    const fixed = await ensureLocalSeedPasswords(store);
+    if (fixed.changed) {
+      console.log(`Local auth: senhas seed aplicadas (${LOCAL_DEV_PASSWORD})`);
+    }
   }
-  console.log(`Admin allowlist: ${ALLOWED_ADMINS.join(', ')}`);
+  const onListen = () => {
+    const where = LISTEN_HOST ? `${LISTEN_HOST}:${PORT}` : `0.0.0.0:${PORT}`;
+    console.log(`FutGreen listening on http://${where}`);
+    console.log(`Health: http://127.0.0.1:${PORT}/health`);
+    if (IS_LOCAL) {
+      console.log(`Workshop: http://localhost:${PORT}/local/`);
+      console.log(`Local login: admin@futgreen.local / ${LOCAL_DEV_PASSWORD}`);
+      console.log('Live reload: ON');
+    }
+    console.log(`Admin allowlist: ${ALLOWED_ADMINS.join(', ')}`);
+  };
+  if (LISTEN_HOST) server.listen(PORT, LISTEN_HOST, onListen);
+  else server.listen(PORT, onListen);
+}
+
+boot().catch((e) => {
+  console.error(e);
+  process.exit(1);
 });
