@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Minhas Proteções · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Minhas Proteções</h2>
+        <div id="list"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, brl, fmtWhen } from '/public/js/api.js';
+    import { teamPairCell } from '/public/js/teams-ui.js';
+
+    await mountShell();
+    const { protections } = await api('/api/futgreen/protections');
+    const { matches } = await api('/api/futgreen/matches?all=1');
+    const byId = Object.fromEntries(matches.map((m) => [m.id, m]));
+    const el = document.getElementById('list');
+
+    if (!protections.length) {
+      el.innerHTML = '<p class="fg-empty">Nenhuma proteção ainda. <a href="/app-proteger.html">Proteger aposta</a></p>';
+    } else {
+      el.innerHTML = `
+        <div class="fg-grid">
+          ${protections
+            .map((p) => {
+              const m = byId[p.match_id];
+              const game = m
+                ? teamPairCell(m.home_team, m.away_team, m.home_logo, m.away_logo)
+                : `<span>${p.match_id}</span>`;
+              return `
+              <article class="fg-match">
+                ${game}
+                <div class="fg-meta" style="margin-top:0.65rem">${m?.league || ''} · ${fmtWhen(p.created_at)}</div>
+                <div class="fg-meta">${p.side} @ ${p.odd} · ${brl(p.amount_cents)}</div>
+                <span class="fg-status ${p.result || p.status}">${p.result || p.status}</span>
+              </article>`;
+            })
+            .join('')}
+        </div>`;
+    }
+  </script>
+</body>
+</html>

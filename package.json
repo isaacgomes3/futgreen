@@ -1,0 +1,20 @@
+{
+  "name": "futgreen",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FUTGRN — Jogos Protegidos (stake_lock_v1) e Desafio",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/futgreen-server.mjs",
+    "dev": "node --watch scripts/futgreen-server.mjs",
+    "local": "node scripts/local-dev.mjs --open",
+    "local:quiet": "node scripts/local-dev.mjs",
+    "local:reseed": "node scripts/local-dev.mjs --reseed --open",
+    "seed": "node scripts/seed.mjs",
+    "test": "node --test tests/**/*.test.mjs",
+    "audit:prod": "node scripts/audit-surface.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

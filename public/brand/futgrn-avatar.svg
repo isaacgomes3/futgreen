@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="FUTGRN">
+  <defs>
+    <linearGradient id="avGlow" x1="15%" y1="10%" x2="90%" y2="90%">
+      <stop offset="0%" stop-color="#e6ff66"/>
+      <stop offset="50%" stop-color="#c8ff00"/>
+      <stop offset="100%" stop-color="#3dff9a"/>
+    </linearGradient>
+    <radialGradient id="avBg" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#1a2420"/>
+      <stop offset="100%" stop-color="#070908"/>
+    </radialGradient>
+  </defs>
+  <!-- circular profile crop -->
+  <circle cx="64" cy="64" r="64" fill="url(#avBg)"/>
+  <circle cx="64" cy="64" r="61" fill="none" stroke="url(#avGlow)" stroke-width="3" stroke-opacity="0.55"/>
+  <path fill="url(#avGlow)" d="M64 22
+    C76 22 92 28 99 33
+    V60
+    C99 82 85 97 64 106
+    C43 97 29 82 29 60
+    V33
+    C36 28 52 22 64 22Z"/>
+  <path fill="#070908" d="M48 42h32v9H58v9h18v9H58v16H48V42z"/>
+  <circle cx="64" cy="70" r="2.8" fill="#070908"/>
+</svg>

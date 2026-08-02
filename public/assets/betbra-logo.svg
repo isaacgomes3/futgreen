@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BetBra">
+  <defs>
+    <linearGradient id="bb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00e676"/>
+      <stop offset="100%" stop-color="#00c853"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0b1f14"/>
+  <rect x="3" y="3" width="58" height="58" rx="12" fill="none" stroke="url(#bb)" stroke-width="2" opacity="0.7"/>
+  <path fill="url(#bb)" d="M18 16h16.5c7.2 0 12 3.8 12 9.4 0 3.6-2 6.4-5.4 7.8 4.2 1.2 6.9 4.4 6.9 8.8 0 6.2-5.2 10-13.2 10H18V16zm8.2 7.2v6.6h7c2.8 0 4.4-1.3 4.4-3.4s-1.6-3.2-4.5-3.2h-6.9zm0 12.8v7.6h8.2c3.2 0 5-1.5 5-3.9s-1.8-3.7-5.2-3.7h-8z"/>
+</svg>

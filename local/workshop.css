@@ -1,0 +1,206 @@
+.ws-body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  background:
+    radial-gradient(800px 400px at 0% 0%, rgba(200, 255, 0, 0.1), transparent 50%),
+    linear-gradient(180deg, #070908, #0c100e);
+  font-family: var(--font-body);
+  color: var(--fg-ink);
+}
+
+.ws-side {
+  padding: 1.1rem 1rem 1.4rem;
+  border-right: 1px solid var(--fg-line-soft);
+  background: #0e1411;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-height: 100vh;
+  overflow: auto;
+  position: sticky;
+  top: 0;
+}
+
+.ws-tag {
+  margin: -0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--fg-mute);
+}
+
+.ws-block label,
+.ws-label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+
+.ws-block select {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--fg-line-soft);
+  background: var(--fg-void);
+  color: var(--fg-ink);
+}
+
+.ws-seg {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+}
+.ws-seg button,
+.ws-nav button {
+  appearance: none;
+  border: 1px solid var(--fg-line-soft);
+  background: var(--fg-panel);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg-ink);
+}
+.ws-seg button.is-on,
+.ws-nav button.is-on {
+  background: linear-gradient(110deg, var(--fg-lime), #a8e600);
+  color: #0a1008;
+  border-color: transparent;
+  box-shadow: var(--glow-lime);
+}
+
+.ws-nav {
+  display: grid;
+  gap: 0.35rem;
+}
+.ws-nav .ws-label { margin-top: 0.55rem; }
+
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.ws-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #555;
+}
+.ws-status.ok .ws-dot { background: var(--fg-lime); box-shadow: 0 0 0 3px rgba(200,255,0,0.2); }
+.ws-status.bad .ws-dot { background: var(--fg-danger); }
+
+.ws-actions {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: auto;
+}
+.ws-actions .fg-btn { width: 100%; font-size: 0.85rem; padding: 0.55rem 0.7rem; }
+
+.ws-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.ws-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--fg-line-soft);
+  background: rgba(7, 9, 8, 0.85);
+  backdrop-filter: blur(10px);
+}
+.ws-bar strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-style: italic;
+  text-transform: uppercase;
+  display: block;
+}
+.ws-bar code {
+  font-size: 0.75rem;
+  color: var(--fg-mute);
+}
+.ws-bar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+.ws-bar-meta .fg-chip {
+  background: var(--fg-lime-dim);
+  color: var(--fg-lime);
+  border: 1px solid rgba(200,255,0,0.2);
+  border-radius: 8px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ws-frame-wrap {
+  flex: 1;
+  display: grid;
+  place-items: start center;
+  padding: 1rem;
+  overflow: auto;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(200,255,0,0.03) 24px),
+    repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(200,255,0,0.03) 24px);
+}
+
+#preview {
+  width: var(--ws-width, 100%);
+  max-width: 100%;
+  height: calc(100vh - 5.5rem);
+  border: 1px solid rgba(200,255,0,0.2);
+  border-radius: 16px;
+  background: var(--fg-void);
+  box-shadow: var(--glow-soft), 0 0 40px rgba(200,255,0,0.08);
+  transition: width 0.2s ease;
+}
+
+@media (max-width: 900px) {
+  .ws-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .ws-side {
+    position: relative;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--fg-line-soft);
+  }
+  .ws-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ws-nav .ws-label {
+    grid-column: 1 / -1;
+  }
+  .ws-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ws-frame-wrap { padding: 0.65rem; }
+  #preview {
+    height: min(70vh, 640px);
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  .ws-seg { grid-template-columns: 1fr; }
+  .ws-nav { grid-template-columns: 1fr; }
+  #preview { height: 65vh; width: 100% !important; }
+}

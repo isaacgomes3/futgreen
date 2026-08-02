@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Monitor Desafios · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Monitor de Desafios</h2>
+        <div id="cards"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, toast, fmtWhen } from '/public/js/api.js';
+
+    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
+      localStorage.setItem('fg_email', 'admin@futgreen.local');
+    }
+    await mountShell({ admin: true });
+
+    const { desafios } = await api('/api/futgreen/desafios?admin=1', { admin: true });
+    const { counts } = await api('/api/futgreen/desafio-pending-counts', { method: 'POST', admin: true, body: {} });
+    const el = document.getElementById('cards');
+
+    el.innerHTML = desafios
+      .flatMap(({ desafio, steps }) =>
+        (steps || []).map(
+          (s) => `
+        <article class="mdz-card">
+          <div class="mdz-card-top">
+            <span>${desafio.title}</span>
+            <span>${counts[s.id] || 0} pendentes</span>
+          </div>
+          <div class="mdz-card-game">${s.home_team} × ${s.away_team}</div>
+          <div class="fg-meta">${fmtWhen(s.starts_at)} · ${s.status} · FG ${s.odd_futgreen}</div>
+          <div class="mdz-card-foot" data-step="${s.id}">
+            ${
+              s.status !== 'done'
+                ? `
+              <button class="fg-btn" data-win="futgreen">Bateu FUTGRN</button>
+              <button class="fg-btn warn" data-win="casa">Bateu Casa</button>
+              <button class="fg-btn ghost" data-win="void">Empate Anula</button>`
+                : `<span class="fg-status">${s.result}</span>`
+            }
+          </div>
+        </article>`,
+        ),
+      )
+      .join('') || '<p class="fg-empty">Nada para monitorar.</p>';
+
+    el.querySelectorAll('[data-win]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await api('/api/futgreen/desafio-settle', {
+            method: 'POST',
+            admin: true,
+            body: { step_id: btn.closest('[data-step]').dataset.step, winningSide: btn.dataset.win },
+          });
+          toast('OK');
+          location.reload();
+        } catch (e) {
+          toast(e.message);
+        }
+      };
+    });
+  </script>
+</body>
+</html>

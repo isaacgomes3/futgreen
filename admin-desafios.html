@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Admin Desafios · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Lançar / operar Desafio</h2>
+        <div id="radar"></div>
+        <form id="create" class="fg-form fg-match" style="max-width:640px;margin-bottom:2rem">
+          <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Novo desafio</h3>
+          <label>Título <input name="title" value="Desafio da semana" required /></label>
+          <label>Casa <input name="home_team" id="home_team" autocomplete="off" required /></label>
+          <input type="hidden" name="home_logo" id="home_logo" />
+          <label>Visitante <input name="away_team" id="away_team" autocomplete="off" required /></label>
+          <input type="hidden" name="away_logo" id="away_logo" />
+          <label>Time zebra
+            <select name="bet_team_side"><option value="home">Casa</option><option value="away" selected>Visitante</option></select>
+          </label>
+          <label>Odd FUTGRN <input name="odd_futgreen" type="number" step="0.01" value="3.40" required /></label>
+          <label>Odd Casa <input name="odd_casa" type="number" step="0.01" value="1.55" required /></label>
+          <label>Liquidez (R$) <input name="liquidity" type="number" value="5000" /></label>
+          <label>Kickoff <input name="starts_at" type="datetime-local" required /></label>
+          <label><input name="publish" type="checkbox" checked /> Publicar ao salvar</label>
+          <button class="fg-btn" type="submit">Criar desafio</button>
+        </form>
+        <div id="list"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, toast, fmtWhen } from '/public/js/api.js';
+    import { mountBetbraRadar, bindTeamSearch } from '/public/js/admin-radar.js';
+
+    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
+      localStorage.setItem('fg_email', 'admin@futgreen.local');
+    }
+    await mountShell({ admin: true });
+
+    bindTeamSearch(document.getElementById('home_team'), {
+      onPick: (t) => {
+        document.getElementById('home_logo').value = t.logo || '';
+      },
+    });
+    bindTeamSearch(document.getElementById('away_team'), {
+      onPick: (t) => {
+        document.getElementById('away_logo').value = t.logo || '';
+      },
+    });
+
+    async function load() {
+      const { desafios } = await api('/api/futgreen/desafios?admin=1', { admin: true });
+      const el = document.getElementById('list');
+      el.innerHTML =
+        desafios
+          .map(
+            ({ desafio, steps }) => `
+          <article class="mdz-card">
+            <div class="mdz-card-top">
+              <span>${desafio.title} · ${desafio.is_published ? 'Publicado' : 'Rascunho'}</span>
+              <span>${desafio.id}</span>
+            </div>
+            ${(steps || [])
+              .map(
+                (s) => `
+              <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0.5rem;align-items:center;margin-top:.6rem">
+                <div style="display:flex;align-items:center;gap:0.4rem">
+                  ${s.home_logo ? `<img src="${s.home_logo}" width="28" height="28" style="border-radius:50%" alt="" />` : ''}
+                  <strong>${s.home_team}</strong>
+                </div>
+                <span class="fg-vs">×</span>
+                <div style="display:flex;align-items:center;gap:0.4rem;justify-content:flex-end">
+                  <strong>${s.away_team}</strong>
+                  ${s.away_logo ? `<img src="${s.away_logo}" width="28" height="28" style="border-radius:50%" alt="" />` : ''}
+                </div>
+              </div>
+              <div class="fg-meta">Etapa ${s.step_index} · FG ${s.odd_futgreen} / Casa ${s.odd_casa} · zebra ${s.bet_team_side} · ${s.status} · ${fmtWhen(s.starts_at)}</div>
+              <div class="mdz-card-foot" data-step="${s.id}">
+                ${
+                  s.status !== 'done'
+                    ? `
+                  <button class="fg-btn" data-win="futgreen">Bateu FUTGRN</button>
+                  <button class="fg-btn warn" data-win="casa">Bateu Casa</button>
+                  <button class="fg-btn ghost" data-win="void">Empate Anula</button>
+                `
+                    : `<span class="fg-status">${s.result}</span>`
+                }
+                ${
+                  s.exchange_url
+                    ? `<a class="fg-btn ghost fg-betbra-btn" href="${s.exchange_url}" target="_blank" rel="noopener" title="Abrir na BetBra"><svg class="fg-betbra-mark" viewBox="0 0 64 64" width="22" height="22" aria-hidden="true"><g transform="translate(32 32) skewX(-10) translate(-32 -32)"><path fill="#00A651" d="M13 7h21c9.5 0 16 5.4 16 13.6 0 5-2.6 9-7 10.9 5.4 1.6 9 6.2 9 12.4C52 55.2 44.6 61 33.8 61H13V7z"/><path fill="#0a0e0c" d="M25 17h9.2c4.2 0 6.6 2 6.6 5.4s-2.4 5.4-6.6 5.4H25V17z"/><path fill="#0a0e0c" d="M25 37h10.4c4.8 0 7.6 2.6 7.6 6.8S40.2 51 35.4 51H25V37z"/><rect x="9" y="6" width="13" height="52" rx="1.5" fill="#FFCC29"/><circle cx="35" cy="38" r="17" fill="#FFCC29"/><circle cx="35" cy="38" r="7.5" fill="#3E5FBF"/></g></svg><span>Abrir BetBra</span></a>`
+                    : ''
+                }
+              </div>`,
+              )
+              .join('')}
+            <div class="mdz-card-foot" style="margin-top:.5rem">
+              ${!desafio.is_published ? `<button class="fg-btn" data-pub="${desafio.id}">Publicar</button>` : ''}
+              <button class="fg-btn danger" data-cancel="${desafio.id}">Cancelar desafio</button>
+            </div>
+          </article>`,
+          )
+          .join('') || '<p class="fg-empty">Nenhum desafio.</p>';
+
+      el.querySelectorAll('[data-win]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api('/api/futgreen/desafio-settle', {
+              method: 'POST',
+              admin: true,
+              body: { step_id: btn.closest('[data-step]').dataset.step, winningSide: btn.dataset.win },
+            });
+            toast('Etapa liquidada');
+            await load();
+          } catch (e) {
+            toast(e.message);
+          }
+        };
+      });
+      el.querySelectorAll('[data-pub]').forEach((btn) => {
+        btn.onclick = async () => {
+          await api('/api/futgreen/desafios', {
+            method: 'POST',
+            admin: true,
+            body: { mode: 'publish', id: btn.dataset.pub },
+          });
+          toast('Publicado');
+          await load();
+        };
+      });
+      el.querySelectorAll('[data-cancel]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api('/api/futgreen/desafio-cancel', {
+              method: 'POST',
+              admin: true,
+              body: { desafio_id: btn.dataset.cancel },
+            });
+            toast('Desafio cancelado — entradas estornadas');
+            await load();
+          } catch (e) {
+            toast(e.message);
+          }
+        };
+      });
+    }
+
+    document.getElementById('create').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const starts = new Date(fd.get('starts_at')).toISOString();
+      try {
+        await api('/api/futgreen/desafios', {
+          method: 'POST',
+          admin: true,
+          body: {
+            title: fd.get('title'),
+            publish: fd.get('publish') === 'on',
+            steps: [
+              {
+                home_team: fd.get('home_team'),
+                away_team: fd.get('away_team'),
+                home_logo: fd.get('home_logo') || null,
+                away_logo: fd.get('away_logo') || null,
+                bet_team_side: fd.get('bet_team_side'),
+                odd_futgreen: Number(fd.get('odd_futgreen')),
+                odd_casa: Number(fd.get('odd_casa')),
+                liquidity: Number(fd.get('liquidity')),
+                starts_at: starts,
+                market_flag: 'dnb',
+                casa_name: 'Casa',
+              },
+            ],
+          },
+        });
+        toast('Desafio criado');
+        await load();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    const dt = document.querySelector('[name=starts_at]');
+    const d = new Date(Date.now() + 2 * 3600e3);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    dt.value = d.toISOString().slice(0, 16);
+
+    await mountBetbraRadar(document.getElementById('radar'), {
+      dest: 'desafio',
+      onImported: () => load(),
+    });
+    await load();
+  </script>
+</body>
+</html>

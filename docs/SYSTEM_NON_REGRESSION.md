@@ -1,0 +1,20 @@
+# System Non-Regression — v1
+
+**Contrato:** `system-non-regression-v1`
+
+## Superfícies que não podem regredir sem bump
+
+- Modelo de criação: `createProtectionModel=stake_lock_v1`
+- Health: `protectionRuntime=protection-runtime-stake-lock-v10`
+- Buckets e labels (`Saldo Reembolso`, nunca “Saldo Dedução”)
+- Transferência Banca → Desafio bloqueada (403)
+- Desafio ao vivo: cancelar/excluir → 403
+- `edit_only` em desafios preserva `is_active` / `published_at`
+- Empate Anula/DNB: não liquidar pelo ramo 1X2 `isDraw`
+
+## Checklist pós-deploy
+
+1. `GET /health` com runtime v10 + stake_lock_v1  
+2. `npm test`  
+3. `npm run audit:prod`  
+4. Smoke: publicar jogo → proteger → liquidar; publicar desafio → registrar → settle

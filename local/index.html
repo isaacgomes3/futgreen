@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Workshop local · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+  <link rel="stylesheet" href="/local/workshop.css" />
+</head>
+<body class="ws-body">
+  <aside class="ws-side">
+    <a class="fg-brand" href="/local/">
+      <img class="fg-logo" src="/public/brand/futgrn-mark.svg" width="28" height="28" alt="" />
+      <span class="fg-wordmark">FUTGRN</span>
+    </a>
+    <p class="ws-tag">Ambiente local · visualização</p>
+
+    <div class="ws-block">
+      <label>Persona
+        <select id="persona">
+          <option value="cliente@futgreen.local">Cliente</option>
+          <option value="admin@futgreen.local">Admin</option>
+          <option value="isaac@futgreen.local">Isaac (ops)</option>
+          <option value="carlos@futgreen.local">Carlos (ops)</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="ws-block">
+      <span class="ws-label">Viewport</span>
+      <div class="ws-seg" id="viewport">
+        <button type="button" data-w="100%" class="is-on">Desktop</button>
+        <button type="button" data-w="390px">Mobile</button>
+        <button type="button" data-w="768px">Tablet</button>
+      </div>
+    </div>
+
+    <nav class="ws-nav">
+      <p class="ws-label">Cliente</p>
+      <button type="button" data-src="/">Início</button>
+      <button type="button" data-src="/app-proteger.html" class="is-on">Proteger</button>
+      <button type="button" data-src="/app-protecoes.html">Minhas Proteções</button>
+      <button type="button" data-src="/app-desafio.html">Desafio</button>
+      <button type="button" data-src="/app-desafio-jornada.html">Jornada</button>
+      <button type="button" data-src="/app-carteira.html">Carteira</button>
+
+      <p class="ws-label">Admin</p>
+      <button type="button" data-src="/admin-jogos.html">Jogos</button>
+      <button type="button" data-src="/admin-desafios.html">Desafios</button>
+      <button type="button" data-src="/admin-monitoring-desafios.html">Monitor Desafios</button>
+      <button type="button" data-src="/admin-monitoring-protections.html">Monitor Proteções</button>
+      <button type="button" data-src="/admin-manual-deposits.html">Depósitos</button>
+      <button type="button" data-src="/admin-users.html">Usuários</button>
+      <button type="button" data-src="/admin-transactions.html">Extrato</button>
+    </nav>
+
+    <div class="ws-block ws-status" id="status">
+      <span class="ws-dot"></span>
+      <span id="status-text">checando…</span>
+    </div>
+
+    <div class="ws-actions">
+      <button type="button" class="fg-btn ghost" id="btn-reload">Recarregar preview</button>
+      <button type="button" class="fg-btn ghost" id="btn-open">Abrir em aba</button>
+      <button type="button" class="fg-btn warn" id="btn-reseed">Reset seed</button>
+    </div>
+  </aside>
+
+  <main class="ws-main">
+    <header class="ws-bar">
+      <div>
+        <strong id="screen-name">Proteger</strong>
+        <code id="screen-path">/app-proteger.html</code>
+      </div>
+      <div class="ws-bar-meta" id="wallet-chips"></div>
+    </header>
+    <div class="ws-frame-wrap">
+      <iframe id="preview" title="Preview FUTGRN" src="/app-proteger.html"></iframe>
+    </div>
+  </main>
+
+  <script type="module" src="/local/workshop.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Jornada Desafio · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Jornada do Desafio</h2>
+        <div id="journey"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, brl, fmtWhen } from '/public/js/api.js';
+    import { teamPairCell } from '/public/js/teams-ui.js';
+
+    await mountShell();
+    const { participations } = await api('/api/futgreen/desafio-jornada', { method: 'POST', body: {} });
+    const el = document.getElementById('journey');
+    el.innerHTML = !participations.length
+      ? '<p class="fg-empty">Sem entradas. <a href="/app-desafio.html">Ver grade</a></p>'
+      : `<div class="fg-grid">
+          ${participations
+            .map((p) => {
+              const s = p.step;
+              const game = s
+                ? teamPairCell(s.home_team, s.away_team, s.home_logo, s.away_logo)
+                : `<span>${p.step_id}</span>`;
+              return `
+              <article class="fg-match">
+                ${game}
+                <div class="fg-meta" style="margin-top:0.65rem">${fmtWhen(p.created_at)} · odd ${p.odd}</div>
+                <div class="fg-meta">Stake ${brl(p.stake_cents)}</div>
+                <span class="fg-status ${p.result || p.status}">${p.result || p.status}</span>
+              </article>`;
+            })
+            .join('')}
+        </div>`;
+  </script>
+</body>
+</html>

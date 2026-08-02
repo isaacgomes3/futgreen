@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Monitor Proteções · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Monitor de Proteções</h2>
+        <div id="list"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, toast, brl, fmtWhen } from '/public/js/api.js';
+
+    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
+      localStorage.setItem('fg_email', 'admin@futgreen.local');
+    }
+    await mountShell({ admin: true });
+
+    // Admin vê todas via users + protections por usuário — simplificado: dump store via matches settle list
+    // Endpoint: listamos proteções pedindo como cada user — aqui usamos transactions + me workaround:
+    // Expor via settle list: GET matches all + for each protection we need admin list
+    // Adicionamos fetch de users e proteções agregadas via API interna simples — usar transactions não basta.
+    // Fallback: pedir /api/futgreen/matches e instruir liquidação em admin-jogos; listar via endpoint users wallet locked.
+
+    const { users } = await api('/api/futgreen/users', { admin: true });
+    const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
+    const { matches } = await api('/api/futgreen/matches?all=1');
+    const matchMap = Object.fromEntries(matches.map((m) => [m.id, m]));
+    const { protections } = await api('/api/futgreen/protections/all', { admin: true });
+    const all = protections
+      .filter((x) => x.status === 'active')
+      .map((p) => ({ ...p, user_email: userMap[p.user_id]?.email || p.user_id }));
+
+    const el = document.getElementById('list');
+    if (!all.length) {
+      el.innerHTML = '<p class="fg-empty">Nenhuma proteção ativa.</p>';
+    } else {
+      el.innerHTML = all
+        .map((p) => {
+          const m = matchMap[p.match_id];
+          return `
+          <article class="mdz-card" data-id="${p.id}">
+            <div class="mdz-card-top"><span>${p.user_email}</span><span>${fmtWhen(p.created_at)}</span></div>
+            <div class="mdz-card-game">${m ? `${m.home_team} × ${m.away_team}` : p.match_id}</div>
+            <div class="fg-meta">${p.side} @ ${p.odd} · ${brl(p.amount_cents)}</div>
+            <div class="mdz-card-foot">
+              <button class="fg-btn warn" data-act="close">Encerrar (sem estorno)</button>
+              <button class="fg-btn ghost" data-act="cancel">Cancelar</button>
+            </div>
+          </article>`;
+        })
+        .join('');
+
+      el.querySelectorAll('[data-act]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.closest('[data-id]').dataset.id;
+          const path = btn.dataset.act === 'close' ? 'protection-close' : 'protection-cancel';
+          try {
+            await api(`/api/futgreen/${path}`, { method: 'POST', admin: true, body: { protection_id: id } });
+            toast(btn.dataset.act === 'close' ? 'Encerrada' : 'Cancelada — stake devolvido');
+            location.reload();
+          } catch (e) {
+            toast(e.message);
+          }
+        };
+      });
+    }
+  </script>
+</body>
+</html>

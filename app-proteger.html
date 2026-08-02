@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Proteger Aposta · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Proteger Aposta</h2>
+        <div id="matches" class="fg-grid"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, toast, fmtWhen } from '/public/js/api.js';
+    import { teamBlock } from '/public/js/teams-ui.js';
+
+    const me = await mountShell();
+    const box = document.getElementById('matches');
+
+    async function load() {
+      const { matches } = await api('/api/futgreen/matches');
+      if (!matches.length) {
+        box.innerHTML = '<p class="fg-empty">Nenhum jogo na fila.</p>';
+        return;
+      }
+      box.innerHTML = matches
+        .map(
+          (m) => `
+        <article class="fg-match" data-id="${m.id}">
+          <div class="fg-match-teams">
+            ${teamBlock(m.home_team, m.home_logo)}
+            <div class="fg-vs">×</div>
+            ${teamBlock(m.away_team, m.away_logo)}
+          </div>
+          <div class="fg-meta">${m.league || ''} · ${fmtWhen(m.starts_at)}</div>
+          <form class="fg-form prot-form">
+            <label>Lado
+              <select name="side"><option value="LAY">LAY</option><option value="BACK">BACK</option></select>
+            </label>
+            <label>Odd <input name="odd" type="number" step="0.01" min="1.01" value="2.50" required /></label>
+            <label>Valor (R$) <input name="amount" type="number" step="0.01" min="1" value="100" required /></label>
+            <button class="fg-btn" type="submit">Ativar proteção</button>
+          </form>
+        </article>`,
+        )
+        .join('');
+
+      box.querySelectorAll('.prot-form').forEach((form) => {
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          if (me.impersonating) return toast('Espelho: Proteger é readonly');
+          const art = form.closest('.fg-match');
+          const fd = new FormData(form);
+          try {
+            await api('/api/futgreen/protections', {
+              method: 'POST',
+              body: {
+                match_id: art.dataset.id,
+                side: fd.get('side'),
+                odd: Number(fd.get('odd')),
+                amount: Number(fd.get('amount')),
+              },
+            });
+            toast('Proteção ativada');
+            location.href = '/app-protecoes.html';
+          } catch (err) {
+            toast(err.message);
+          }
+        };
+      });
+    }
+
+    await load();
+  </script>
+</body>
+</html>

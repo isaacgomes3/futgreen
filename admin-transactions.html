@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Extrato admin · FUTGRN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Ledger</h2>
+        <div id="extrato"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { renderExtrato } from '/public/js/v2-financeiro.js';
+
+    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
+      localStorage.setItem('fg_email', 'admin@futgreen.local');
+    }
+    await mountShell({ admin: true });
+    await renderExtrato(document.getElementById('extrato'), { limit: 500 });
+  </script>
+</body>
+</html>

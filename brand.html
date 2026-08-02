@@ -1,0 +1,80 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marca · FUTGRN</title>
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/public/brand/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/public/css/FUTGRN.css" />
+  <style>
+    .brand-kit { display: grid; gap: 1.2rem; }
+    .brand-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.9rem; }
+    .brand-tile {
+      padding: 1.2rem;
+      border-radius: 16px;
+      border: 1px solid var(--fg-line-soft);
+      background: var(--fg-panel);
+      text-align: center;
+    }
+    .brand-tile img { max-width: 100%; height: auto; border-radius: 16px; }
+    .brand-tile.circle img { border-radius: 50%; width: 128px; height: 128px; }
+    .brand-tile code { display: block; margin-top: 0.65rem; font-size: 0.75rem; color: var(--fg-mute); word-break: break-all; }
+    .word-xl {
+      font-family: var(--font-display);
+      font-size: clamp(2.5rem, 8vw, 4.5rem);
+      font-style: italic;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: linear-gradient(100deg, #fff 0 42%, var(--fg-lime) 48% 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin: 0.4rem 0 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <h1 class="fg-page-title">Marca FUTGRN</h1>
+      <p class="lead" style="color:var(--fg-mute);margin-top:-0.4rem">Nome curto, neon, pronto para perfil de plataformas.</p>
+
+      <div class="brand-kit">
+        <article class="fg-card">
+          <div class="word-xl">FUTGRN</div>
+          <p style="color:var(--fg-mute);margin:0.5rem 0 0">Proteção & Desafio · apostas com visual de trading</p>
+        </article>
+
+        <div class="brand-row">
+          <div class="brand-tile">
+            <img src="/public/brand/futgrn-mark.svg" width="128" height="128" alt="Mark" />
+            <strong>Ícone app</strong>
+            <code>/public/brand/futgrn-mark.svg</code>
+          </div>
+          <div class="brand-tile circle">
+            <img src="/public/brand/futgrn-avatar.svg" width="128" height="128" alt="Avatar" />
+            <strong>Avatar perfil</strong>
+            <code>/public/brand/futgrn-avatar.svg</code>
+          </div>
+          <div class="brand-tile">
+            <img src="/public/brand/futgrn-icon-1024.png" width="128" height="128" alt="PNG 1024" />
+            <strong>PNG 1024</strong>
+            <code>/public/brand/futgrn-icon-1024.png</code>
+          </div>
+          <div class="brand-tile">
+            <img src="/public/brand/favicon.svg" width="64" height="64" alt="Favicon" />
+            <strong>Favicon</strong>
+            <code>/public/brand/favicon.svg</code>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    await mountShell();
+  </script>
+</body>
+</html>
