@@ -502,79 +502,7 @@ async function handleApi(req, res, url) {
       saveDiskCache(DATA_DIR);
 
       const dest = body.dest || 'proteger'; // proteger | desafio
-      
       if (dest === 'desafio') {
-        // Se houver seleções ou marketIds, criar múltiplos steps
-        if (selections.length) {
-          const source = detail || normalizeEventDetail(await getEventWithAllMarkets(ev.external_id));
-          const resolved = resolveCartSelections(source, selections);
-          if (!resolved.length) {
-            return send(res, 400, { error: 'Nenhuma odd válida no carrinho' });
-          }
-          const steps = resolved.map(({ market, selection }) => {
-            const runnerName = selection.runner_name || selection.name || '—';
-            const odd = selection[selection.side === 'LAY' ? 'lay_odd' : 'back_odd'] || selection.odd || 3.5;
-            return {
-              home_team: ev.home_team,
-              away_team: ev.away_team,
-              home_logo: ev.home_logo,
-              away_logo: ev.away_logo,
-              bet_team_side: runnerName.toLowerCase().includes('away') || runnerName === ev.away_team ? 'away' : 'home',
-              odd_futgreen: Number(odd),
-              odd_casa: Number(body.odd_casa || 1.5),
-              liquidity: Number(body.liquidity || 0),
-              starts_at: ev.starts_at,
-              market_flag: market.name || 'dnb',
-              casa_name: market.name || 'Casa',
-              casa_logo: '/public/assets/casa-default.svg',
-              external_id: ev.external_id,
-              exchange_url: ev.exchange_url,
-            };
-          });
-          const bundle = await createDesafio(store, {
-            title: body.title || `${ev.home_team} × ${ev.away_team}`,
-            publish: Boolean(body.publish ?? true),
-            steps,
-          });
-          return send(res, 201, { kind: 'desafio', ...bundle, event: ev, count: steps.length });
-        }
-        
-        if (marketIds.length) {
-          const source = detail || normalizeEventDetail(await getEventWithAllMarkets(ev.external_id));
-          const picked = pickMarketsByIds(source, marketIds);
-          if (!picked.length) {
-            return send(res, 400, { error: 'Nenhum mercado válido nos market_ids' });
-          }
-          const steps = picked.map((mkt) => {
-            const runners = mkt.runners || [];
-            const mainRunner = runners[0] || {};
-            const odd = mainRunner.back_odd || mainRunner.lay_odd || body.odd_futgreen || 3.5;
-            return {
-              home_team: ev.home_team,
-              away_team: ev.away_team,
-              home_logo: ev.home_logo,
-              away_logo: ev.away_logo,
-              bet_team_side: mainRunner.name?.toLowerCase().includes('away') ? 'away' : 'home',
-              odd_futgreen: Number(odd),
-              odd_casa: Number(body.odd_casa || 1.5),
-              liquidity: Number(body.liquidity || 0),
-              starts_at: ev.starts_at,
-              market_flag: mkt.name || 'dnb',
-              casa_name: mkt.name || 'Casa',
-              casa_logo: '/public/assets/casa-default.svg',
-              external_id: ev.external_id,
-              exchange_url: ev.exchange_url,
-            };
-          });
-          const bundle = await createDesafio(store, {
-            title: body.title || `${ev.home_team} × ${ev.away_team}`,
-            publish: Boolean(body.publish ?? true),
-            steps,
-          });
-          return send(res, 201, { kind: 'desafio', ...bundle, event: ev, count: steps.length });
-        }
-        
-        // Sem seleções, usar comportamento padrão
         const hint = ev.desafio_hint || {};
         const bundle = await createDesafio(store, {
           title: body.title || `${ev.home_team} × ${ev.away_team}`,
