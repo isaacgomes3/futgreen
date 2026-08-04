@@ -292,7 +292,7 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
 
         function toggleOdd(btn) {
           const mid = btn.dataset.marketId;
-          if (!mid || mid.startsWith('idx-')) {
+          if (!mid || (dest === 'proteger' && mid.startsWith('idx-'))) {
             toast('Mercado sem id — não dá para importar');
             return;
           }
