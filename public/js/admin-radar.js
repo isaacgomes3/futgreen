@@ -181,7 +181,7 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
       /** @type {Map<string, {key:string, market_id:string, market_name:string, runner_name:string, runner_id:string|null, side:string, odd:number}>} */
       const cart = new Map();
 
-      const canPickOdds = dest === 'proteger';
+      const canPickOdds = dest === 'proteger' || dest === 'desafio';
       status.textContent = canPickOdds
         ? `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd (back/lay)`
         : `${markets.length} mercados · ${ev.home_team} × ${ev.away_team}`;
