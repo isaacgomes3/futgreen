@@ -143,7 +143,7 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
         body,
       });
       const n = res.count || res.matches?.length || 1;
-      if (dest === 'desafio') toast('Desafio importado da BetBra');
+      if (dest === 'desafio') toast(publish ? 'Desafio publicado com o card' : 'Card do desafio salvo em rascunho');
       else if (selections?.length) toast(n > 1 ? `${n} odds lançadas` : 'Odd lançada');
       else if (n > 1) toast(`${n} mercados lançados`);
       else toast(marketIds?.length ? 'Mercado lançado' : 'Jogo importado da BetBra');
@@ -187,10 +187,11 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
         ]),
       );
 
-      const canPickOdds = dest === 'proteger';
-      status.textContent = canPickOdds
-        ? `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd (back/lay)`
-        : `${markets.length} mercados · ${ev.home_team} × ${ev.away_team}`;
+      const canPickOdds = true;
+      status.textContent =
+        dest === 'desafio'
+          ? `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd do time zebra e do favorito`
+          : `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd (back/lay)`;
       list.innerHTML = `
         <article class="mdz-card fg-event-detail" style="padding:0.85rem 0.2rem">
           <div class="mdz-card-top">
@@ -204,7 +205,11 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
           </div>
           <div class="fg-meta" style="margin-bottom:0.55rem">
             Vol evento ${brl((ev.volume || 0) * 100)}
-            ${canPickOdds ? ' · cada odd back/lay é independente · carrinho abaixo' : ''}
+            ${
+              dest === 'desafio'
+                ? ' · escolha a odd zebra e a odd casa · carrinho abaixo'
+                : ' · cada odd back/lay é independente · carrinho abaixo'
+            }
           </div>
           <div id="bb-cart" class="fg-cart" hidden>
             <div class="fg-cart-head">
@@ -275,8 +280,13 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
           btnPub.disabled = n === 0;
           cartEl.hidden = n === 0;
           cartCount.textContent = n ? `${n} odd${n > 1 ? 's' : ''}` : '';
-          btnDraft.textContent = n <= 1 ? 'Lançar rascunho' : `Lançar ${n} rascunhos`;
-          btnPub.textContent = n <= 1 ? 'Lançar e publicar' : `Publicar ${n} odds`;
+          if (dest === 'desafio') {
+            btnDraft.textContent = 'Salvar card em rascunho';
+            btnPub.textContent = 'Publicar card no desafio';
+          } else {
+            btnDraft.textContent = n <= 1 ? 'Lançar rascunho' : `Lançar ${n} rascunhos`;
+            btnPub.textContent = n <= 1 ? 'Lançar e publicar' : `Publicar ${n} odds`;
+          }
           cartItems.innerHTML = items
             .map((x) => {
               const liq =

@@ -310,6 +310,40 @@ export function resolveCartSelections(eventDetail, selections) {
   return out;
 }
 
+/**
+ * Converte selections do carrinho (já resolvidas) em campos do card de Desafio.
+ * Regra: entre as 2 seleções (home/away), a de maior odd é a zebra (odd_futgreen);
+ * a outra vira odd_casa. Se só uma seleção bater com home/away, usa só ela como zebra.
+ */
+export function desafioFieldsFromSelections(eventBase, resolved) {
+  if (!resolved?.length) return null;
+  const homeSel = resolved.find(({ selection }) => selection.runner_name === eventBase.home_team);
+  const awaySel = resolved.find(({ selection }) => selection.runner_name === eventBase.away_team);
+  if (!homeSel && !awaySel) return null;
+
+  if (homeSel && awaySel) {
+    const homeOdd = Number(homeSel.selection.odd);
+    const awayOdd = Number(awaySel.selection.odd);
+    const zebraIsAway = awayOdd > homeOdd;
+    const zebraSel = zebraIsAway ? awaySel : homeSel;
+    const favSel = zebraIsAway ? homeSel : awaySel;
+    const liq = zebraSel.selection.liquidity ?? favSel.selection.liquidity;
+    return {
+      bet_team_side: zebraIsAway ? 'away' : 'home',
+      odd_futgreen: zebraSel.selection.odd,
+      odd_casa: favSel.selection.odd,
+      ...(liq != null ? { liquidity: liq } : {}),
+    };
+  }
+
+  const only = homeSel || awaySel;
+  return {
+    bet_team_side: homeSel ? 'home' : 'away',
+    odd_futgreen: only.selection.odd,
+    ...(only.selection.liquidity != null ? { liquidity: only.selection.liquidity } : {}),
+  };
+}
+
 /** Normaliza evento BetBra → payload admin (proteger / desafio) */
 export function normalizePreliveEvent(ev) {
   const teams = parseEventTeams(ev);

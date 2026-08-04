@@ -43,6 +43,7 @@ import {
   pickMarketsByIds,
   selectionToMatchFields,
   resolveCartSelections,
+  desafioFieldsFromSelections,
 } from './lib/betbra-client.mjs';
 import {
   searchFootballTeams,
@@ -568,6 +569,15 @@ async function handleApi(req, res, url) {
       const dest = body.dest || 'proteger'; // proteger | desafio
       if (dest === 'desafio') {
         const hint = ev.desafio_hint || {};
+        let stepFromCart = null;
+        if (selections.length) {
+          const source = detail || normalizeEventDetail(await getEventWithAllMarkets(ev.external_id));
+          const resolved = resolveCartSelections(source, selections);
+          if (!resolved.length) {
+            return send(res, 400, { error: 'Nenhuma odd válida no carrinho' });
+          }
+          stepFromCart = desafioFieldsFromSelections(ev, resolved);
+        }
         const bundle = await createDesafio(store, {
           title: body.title || `${ev.home_team} × ${ev.away_team}`,
           publish: Boolean(body.publish ?? true),
@@ -577,10 +587,10 @@ async function handleApi(req, res, url) {
               away_team: ev.away_team,
               home_logo: ev.home_logo,
               away_logo: ev.away_logo,
-              bet_team_side: body.bet_team_side || hint.bet_team_side || 'away',
-              odd_futgreen: Number(body.odd_futgreen || hint.odd_futgreen || 3.5),
-              odd_casa: Number(body.odd_casa || hint.odd_casa || 1.5),
-              liquidity: Number(body.liquidity || hint.liquidity || 0),
+              bet_team_side: stepFromCart?.bet_team_side || body.bet_team_side || hint.bet_team_side || 'away',
+              odd_futgreen: Number(stepFromCart?.odd_futgreen ?? body.odd_futgreen ?? hint.odd_futgreen ?? 3.5),
+              odd_casa: Number(stepFromCart?.odd_casa ?? body.odd_casa ?? hint.odd_casa ?? 1.5),
+              liquidity: Number(stepFromCart?.liquidity ?? body.liquidity ?? hint.liquidity ?? 0),
               starts_at: ev.starts_at,
               market_flag: body.market_flag || 'dnb',
               casa_name: body.casa_name || 'Casa',

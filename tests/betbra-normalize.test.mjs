@@ -10,6 +10,7 @@ import {
   pickMarketsByIds,
   selectionToMatchFields,
   resolveCartSelections,
+  desafioFieldsFromSelections,
 } from '../scripts/lib/betbra-client.mjs';
 
 const sample = {
@@ -156,4 +157,34 @@ test('carrinho liquidez individual por seleção', () => {
   assert.equal(f0.volume, 1500);
   assert.equal(f1.liquidity, 0);
   assert.equal(f1.volume, 1200); // volume do mercado intacto
+});
+
+test('desafioFieldsFromSelections monta o card a partir do carrinho (zebra = maior odd)', () => {
+  const detail = normalizeEventDetail(sample);
+  const resolved = resolveCartSelections(detail, [
+    { market_id: 'm1', runner_name: 'Flamengo', side: 'BACK', odd: 2.1 },
+    { market_id: 'm1', runner_name: 'Palmeiras', side: 'BACK', odd: 3.4, liquidity: 4000 },
+  ]);
+  const fields = desafioFieldsFromSelections(
+    { home_team: 'Flamengo', away_team: 'Palmeiras' },
+    resolved,
+  );
+  assert.equal(fields.bet_team_side, 'away');
+  assert.equal(fields.odd_futgreen, 3.4);
+  assert.equal(fields.odd_casa, 2.1);
+  assert.equal(fields.liquidity, 4000);
+});
+
+test('desafioFieldsFromSelections com só 1 seleção usa só a zebra', () => {
+  const detail = normalizeEventDetail(sample);
+  const resolved = resolveCartSelections(detail, [
+    { market_id: 'm1', runner_name: 'Flamengo', side: 'BACK', odd: 2.1 },
+  ]);
+  const fields = desafioFieldsFromSelections(
+    { home_team: 'Flamengo', away_team: 'Palmeiras' },
+    resolved,
+  );
+  assert.equal(fields.bet_team_side, 'home');
+  assert.equal(fields.odd_futgreen, 2.1);
+  assert.equal(fields.odd_casa, undefined);
 });
