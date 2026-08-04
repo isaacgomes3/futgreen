@@ -5,7 +5,7 @@ const CLIENT_LINKS = [
   { href: '/app.html', label: 'Visão Geral', ico: '◈', group: 'OPERAÇÕES' },
   { href: '/app-proteger.html', label: 'Proteger', ico: '🛡', group: 'OPERAÇÕES' },
   { href: '/app-protecoes.html', label: 'Minhas Proteções', ico: '◎', group: 'OPERAÇÕES' },
-  { href: '/app-desafio.html', label: 'Jornada', ico: '⚡', group: 'OPERAÇÕES', novo: true },
+  { href: '/app-desafio.html', label: 'Desafio', ico: '⚡', group: 'OPERAÇÕES' },
   { href: '/app-carteira.html', label: 'Carteira', ico: '₿', group: 'OPERAÇÕES' },
 ];
 
