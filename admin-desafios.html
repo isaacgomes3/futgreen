@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
   <title>Admin Desafios · FUTGRN</title>
-  <link rel="stylesheet" href="/public/css/futgreen.css" />
+  <link rel="stylesheet" href="/public/css/futgreen.css?v=stack1" />
 </head>
 <body>
   <div class="fg-shell" id="fg-shell-root">
@@ -37,11 +37,7 @@
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
     import { api, toast, fmtWhen } from '/public/js/api.js';
-    import { mountBetbraRadar, bindTeamSearch } from '/public/js/admin-radar.js';
-
-    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
-      localStorage.setItem('fg_email', 'admin@futgreen.local');
-    }
+    import { mountBetbraRadar, bindTeamSearch } from '/public/js/admin-radar.js?v=stack1';
     await mountShell({ admin: true });
 
     bindTeamSearch(document.getElementById('home_team'), {

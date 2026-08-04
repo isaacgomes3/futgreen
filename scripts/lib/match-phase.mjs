@@ -115,10 +115,16 @@ export function deriveMatchPhase(match, now = Date.now()) {
     clock = display >= 90 ? "90'+" : `${display}'`;
     badge = '2º tempo';
   } else {
-    // Tempo regulamentar estourado — ainda não liquidado
-    phase = 'live';
-    clock = "90'+";
-    badge = 'Aguardando';
+    // Tempo regulamentar + acréscimos estourados → encerra no site (não liquida proteção)
+    return {
+      phase: 'finished',
+      clock: 'FT',
+      badge: 'Encerrado',
+      home_score: home,
+      away_score: away,
+      live: false,
+      finished: true,
+    };
   }
 
   return {
@@ -134,13 +140,24 @@ export function deriveMatchPhase(match, now = Date.now()) {
 
 /** Persiste flags leves quando o jogo já começou (sem liquidar). */
 export function touchMatchLiveState(match, now = Date.now()) {
-  const phase = deriveMatchPhase(match, now);
   let changed = false;
-  if (phase.live && !match.live) {
+  const phase = deriveMatchPhase(match, now);
+
+  // Encerra partida no site por tempo ou FT (score sync) — sem liquidar
+  if (phase.finished && !match.finished_at) {
+    match.finished_at = match.settled_at || new Date().toISOString();
+    match.live = false;
+    if (match.period !== 'ft') match.period = 'ft';
+    if (match.home_score == null) match.home_score = Number.isFinite(phase.home_score) ? phase.home_score : 0;
+    if (match.away_score == null) match.away_score = Number.isFinite(phase.away_score) ? phase.away_score : 0;
+    changed = true;
+  }
+
+  if (phase.live && !match.live && !match.finished_at) {
     match.live = true;
     changed = true;
   }
-  if (phase.live) {
+  if (phase.live && !match.finished_at) {
     if (match.home_score == null) {
       match.home_score = 0;
       changed = true;
@@ -150,9 +167,7 @@ export function touchMatchLiveState(match, now = Date.now()) {
       changed = true;
     }
   }
-  if (phase.finished && !match.finished_at && match.settled_at) {
-    match.finished_at = match.settled_at;
-    changed = true;
-  }
-  return { match, phase, changed };
+  // Recompute after possible finish flags
+  const finalPhase = changed ? deriveMatchPhase(match, now) : phase;
+  return { match, phase: finalPhase, changed };
 }

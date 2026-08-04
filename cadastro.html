@@ -18,16 +18,41 @@
     </a>
     <h1>Criar conta</h1>
     <p class="fg-auth-sub">Comece a operar com ferramentas estruturadas para o mercado esportivo.</p>
+    <p class="fg-meta" id="ref-banner" hidden style="margin:0 0 0.75rem"></p>
     <form id="form" class="fg-form">
       <label>Nome <input name="name" type="text" autocomplete="name" required maxlength="80" /></label>
       <label>E-mail <input name="email" type="email" autocomplete="email" required /></label>
       <label>Senha <input name="password" type="password" autocomplete="new-password" required minlength="6" /></label>
+      <input type="hidden" name="ref" id="ref-input" value="" />
       <button class="fg-btn" type="submit">Criar conta</button>
     </form>
     <p class="fg-auth-foot">Já tem conta? <a href="/entrar.html">Entrar</a></p>
   </main>
   <script type="module">
     import { api, setEmail, toast } from '/public/js/api.js';
+
+    const params = new URLSearchParams(location.search);
+    const refCode = String(params.get('ref') || params.get('codigo') || '').trim().toLowerCase();
+    if (refCode) {
+      document.getElementById('ref-input').value = refCode;
+      try {
+        localStorage.setItem('fg_ref', refCode);
+      } catch { /* ignore */ }
+      const banner = document.getElementById('ref-banner');
+      try {
+        const info = await api(`/api/futgreen/referral/lookup?code=${encodeURIComponent(refCode)}`);
+        banner.hidden = false;
+        banner.textContent = `Indicação de ${info.name}`;
+      } catch {
+        banner.hidden = false;
+        banner.textContent = 'Link de indicação aplicado';
+      }
+    } else {
+      try {
+        const saved = localStorage.getItem('fg_ref');
+        if (saved) document.getElementById('ref-input').value = saved;
+      } catch { /* ignore */ }
+    }
 
     document.getElementById('form').onsubmit = async (e) => {
       e.preventDefault();
@@ -39,15 +64,17 @@
             name: fd.get('name'),
             email: fd.get('email'),
             password: fd.get('password'),
+            ref: fd.get('ref') || undefined,
           },
         });
-        if (data.pending_activation || data.user?.is_active === false) {
-          toast('Conta criada — aguarde ativação do administrador');
-          location.href = '/entrar.html';
-          return;
-        }
+        try { localStorage.removeItem('fg_ref'); } catch { /* ignore */ }
         setEmail(data.user.email);
         localStorage.setItem('fg_authed', '1');
+        if (data.deposit_only || data.user?.deposit_only || data.user?.is_active === false) {
+          toast('Conta criada — faça o depósito PIX para liberar');
+          location.href = '/app-carteira.html';
+          return;
+        }
         toast('Conta criada');
         location.href = '/app.html';
       } catch (err) {

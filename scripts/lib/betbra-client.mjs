@@ -248,7 +248,7 @@ export function pickMarketsByIds(eventDetail, marketIds) {
 }
 
 /**
- * Selection de odd (carrinho): { market_id, runner_name, side: BACK|LAY, odd }
+ * Selection de odd (carrinho): { market_id, runner_name, side: BACK|LAY, odd, liquidity? }
  * → campos de match para lançar ao cliente
  */
 export function selectionToMatchFields(eventBase, market, selection) {
@@ -256,11 +256,19 @@ export function selectionToMatchFields(eventBase, market, selection) {
   const odd = Number(selection.odd);
   const runnerName = selection.runner_name || selection.selection_name || '—';
   const base = marketToMatchFields(eventBase, market);
+  const hasLiq =
+    selection.liquidity != null && selection.liquidity !== '' ||
+    selection.liquidez != null && selection.liquidez !== '';
+  const liqRaw = Number(selection.liquidity ?? selection.liquidez);
+  const liquidity = hasLiq && Number.isFinite(liqRaw) && liqRaw >= 0 ? liqRaw : 0;
   return {
     ...base,
     selection_name: runnerName,
     side,
     odd: Number.isFinite(odd) && odd > 1 ? odd : null,
+    liquidity,
+    // volume do match segue a liquidez só quando o admin informou
+    volume: hasLiq && liquidity > 0 ? liquidity : base.volume,
     label: `${base.market_name} · ${runnerName} ${side}${Number.isFinite(odd) ? ` @ ${odd}` : ''}`,
   };
 }
@@ -283,16 +291,21 @@ export function resolveCartSelections(eventDetail, selections) {
       odd = side === 'LAY' ? runner.lay_odd : runner.back_odd;
     }
     if (!(Number.isFinite(odd) && odd > 1)) continue;
-    out.push({
-      market,
-      selection: {
-        market_id: market.id,
-        runner_name: runner?.name || sel.runner_name || sel.selection_name,
-        runner_id: runner?.id ?? sel.runner_id ?? null,
-        side,
-        odd,
-      },
-    });
+    const hasLiq =
+      (sel.liquidity != null && sel.liquidity !== '') ||
+      (sel.liquidez != null && sel.liquidez !== '');
+    const liqRaw = Number(sel.liquidity ?? sel.liquidez);
+    const selection = {
+      market_id: market.id,
+      runner_name: runner?.name || sel.runner_name || sel.selection_name,
+      runner_id: runner?.id ?? sel.runner_id ?? null,
+      side,
+      odd,
+    };
+    if (hasLiq && Number.isFinite(liqRaw) && liqRaw >= 0) {
+      selection.liquidity = liqRaw;
+    }
+    out.push({ market, selection });
   }
   return out;
 }

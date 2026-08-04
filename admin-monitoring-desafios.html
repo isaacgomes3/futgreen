@@ -19,10 +19,6 @@
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
     import { api, toast, fmtWhen } from '/public/js/api.js';
-
-    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
-      localStorage.setItem('fg_email', 'admin@futgreen.local');
-    }
     await mountShell({ admin: true });
 
     const { desafios } = await api('/api/futgreen/desafios?admin=1', { admin: true });

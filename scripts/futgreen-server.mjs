@@ -14,8 +14,8 @@ import {
 } from './lib/protection-flow-contract.mjs';
 import { assertTransferAllowed, labelForTxType, labelForBucket } from './lib/wallet-buckets-contract.mjs';
 import { parseAllowedAdminEmails, isAdminEmail } from './lib/admin-ops-contract.mjs';
-import { createProtection } from './lib/create-protection.mjs';
-import { settleProtection, closeProtection } from './lib/settle-protection.mjs';
+import { createProtection, matchLiquidityStats } from './lib/create-protection.mjs';
+import { settleProtection, closeProtection, cancelProtectionByClient } from './lib/settle-protection.mjs';
 import {
   createDesafio,
   editDesafio,
@@ -59,12 +59,15 @@ import {
   isSameDayBrazil,
   dayKeyBrazil,
 } from './lib/match-phase.mjs';
+import { syncLiveScores, startLiveScoreScheduler } from './lib/live-score-sync.mjs';
 import {
   hashPassword,
   verifyPassword,
   assertAuthPayload,
   normalizeEmail,
   isUserActive,
+  isUserBlocked,
+  isDepositOnly,
 } from './lib/auth.mjs';
 import { emptyWallet } from './lib/wallet-buckets-contract.mjs';
 import {
@@ -81,6 +84,27 @@ import {
   ensureCollections,
 } from './lib/financeiro-ops.mjs';
 import { ensureLocalSeedPasswords, LOCAL_DEV_PASSWORD } from './lib/local-auth.mjs';
+import { isLucReady } from './lib/luc-paguei-client.mjs';
+import { isAutoConfirmGateway } from './lib/pix-confirmation-policy.mjs';
+import {
+  createPixDeposit,
+  creditDeposit,
+  applyLucWebhook,
+  getUserDeposit,
+  publicDepositView,
+} from './lib/deposits-pix.mjs';
+import {
+  getMinDepositCents,
+  setMinDepositReais,
+  publicDepositSettings,
+} from './lib/app-settings.mjs';
+import {
+  ensureReferralCode,
+  findUserByReferralCode,
+  buildReferralUrl,
+  referralStats,
+  attachReferrer,
+} from './lib/referral.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -151,29 +175,36 @@ function readBody(req) {
 }
 
 function actor(req) {
-  const email = req.headers['x-user-email'] || req.headers['x-admin-email'] || 'cliente@futgreen.local';
+  const email = normalizeEmail(req.headers['x-user-email'] || req.headers['x-admin-email'] || '');
+  if (!email) {
+    return { user: null, adminEmail: null, impersonating: false, anonymous: true };
+  }
   let user = store.getUserByEmail(email);
   if (!user) {
-    user = store.upsertUser({
-      email,
-      name: String(email).split('@')[0],
-      role: isAdminEmail(email, ALLOWED_ADMINS) ? 'admin' : 'client',
-      wallet: {
-        balance_cents: 500000,
-        deduction_balance_cents: 0,
-        locked_balance_cents: 0,
-        desafio_balance_cents: 0,
-        investor_balance_cents: 0,
-        demo_balance_cents: 100000,
-      },
-    });
+    // Local: cria usuário vazio sob demanda. Produção: exige cadastro/login.
+    if (IS_LOCAL) {
+      user = store.upsertUser({
+        email,
+        name: String(email).split('@')[0],
+        role: isAdminEmail(email, ALLOWED_ADMINS) ? 'admin' : 'client',
+        wallet: emptyWallet(),
+        is_active: isAdminEmail(email, ALLOWED_ADMINS),
+      });
+    } else {
+      return { user: null, adminEmail: null, impersonating: false, anonymous: true };
+    }
   }
   const impersonate = req.headers['x-impersonate'];
   if (impersonate && isAdminEmail(email, ALLOWED_ADMINS)) {
     const target = store.getUserByEmail(impersonate) || store.getUser(impersonate);
     if (target) return { user: target, adminEmail: email, impersonating: true };
   }
-  return { user, adminEmail: isAdminEmail(email, ALLOWED_ADMINS) ? email : null, impersonating: false };
+  return {
+    user,
+    adminEmail: isAdminEmail(email, ALLOWED_ADMINS) ? email : null,
+    impersonating: false,
+    anonymous: false,
+  };
 }
 
 function requireAdmin(ctx) {
@@ -225,8 +256,39 @@ async function handleApi(req, res, url) {
   const ctx = actor(req);
   const body = method === 'POST' || method === 'PUT' || method === 'PATCH' ? await readBody(req) : {};
 
+  // Conta bloqueada: só auth/públicas e ações admin
+  const publicApi =
+    p.startsWith('/api/futgreen/auth/') ||
+    p === '/api/futgreen/referral/lookup' ||
+    p.startsWith('/api/futgreen/webhooks/');
+  if (!publicApi && !ctx.user) {
+    return send(res, 401, { error: 'Faça login para continuar', code: 'auth_required' });
+  }
+  if (!publicApi && !ctx.adminEmail && isUserBlocked(ctx.user)) {
+    return send(res, 403, { error: 'Conta bloqueada pelo administrador', code: 'account_blocked' });
+  }
+
+  // Conta aguardando 1º depósito: só perfil + carteira/PIX
+  if (!publicApi && !ctx.adminEmail && isDepositOnly(ctx.user)) {
+    const depositOnlyOk =
+      p === '/api/futgreen/me' ||
+      p === '/api/futgreen/wallet' ||
+      p === '/api/futgreen/transactions' ||
+      p.startsWith('/api/futgreen/deposits');
+    if (!depositOnlyOk) {
+      return send(res, 403, {
+        error: 'Faça o primeiro depósito PIX para liberar a conta',
+        code: 'deposit_required',
+      });
+    }
+  }
+
   // —— Matches / proteção ——
   if (p === '/api/futgreen/matches' && method === 'GET') {
+    // Placar automático (TheSportsDB) — throttle interno
+    try {
+      await syncLiveScores(store);
+    } catch { /* não bloqueia a fila */ }
     const all = url.searchParams.get('all') === '1';
     const now = Date.now();
     /** Indicação lançada pelo admin (publicada com mercado/lado/odd). */
@@ -288,8 +350,10 @@ async function handleApi(req, res, url) {
       }
       const touched = touchMatchLiveState(m, now);
       if (touched.changed) changed = true;
+      const liq = matchLiquidityStats(store, m);
       out.push({
         ...m,
+        ...liq,
         match_phase: touched.phase.phase,
         match_clock: touched.phase.clock,
         match_badge: touched.phase.badge,
@@ -626,6 +690,17 @@ async function handleApi(req, res, url) {
     if (body.action === 'contest_cancel_auto') {
       return send(res, 200, { ok: true, action: 'contest_cancel_auto' });
     }
+    if (body.action === 'cancel' || body.mode === 'cancel') {
+      try {
+        const protection = cancelProtectionByClient(store, {
+          protectionId: body.protection_id || body.id,
+          userId: ctx.user.id,
+        });
+        return send(res, 200, { protection, wallet: store.getUser(ctx.user.id).wallet });
+      } catch (e) {
+        return send(res, e.status || 400, { error: e.message, code: e.code });
+      }
+    }
     try {
       const protection = createProtection(store, {
         userId: ctx.user.id,
@@ -640,9 +715,32 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (p === '/api/futgreen/protections/cancel' && method === 'POST') {
+    if (ctx.impersonating) return send(res, 403, { error: 'Espelho: cancelamento readonly' });
+    try {
+      const protection = cancelProtectionByClient(store, {
+        protectionId: body.protection_id || body.id,
+        userId: ctx.user.id,
+      });
+      return send(res, 200, { protection, wallet: store.getUser(ctx.user.id).wallet });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message, code: e.code });
+    }
+  }
+
   if (p === '/api/futgreen/match-settle' && method === 'POST') {
     requireAdmin(ctx);
     return settleMatch(res, ctx, body);
+  }
+
+  if (p === '/api/futgreen/match-score-sync' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      const result = await syncLiveScores(store, { force: true });
+      return send(res, 200, { ok: true, ...result });
+    } catch (e) {
+      return send(res, e.status || 500, { error: e.message || 'Falha no sync de placar' });
+    }
   }
 
   if (p === '/api/futgreen/match-live-sync' && method === 'POST') {
@@ -1133,27 +1231,131 @@ async function handleApi(req, res, url) {
     });
   }
 
+  // Webhook Luc Paguei (sem auth de sessão — sempre 200)
+  if (
+    (p === '/api/futgreen/webhooks/luc-paguei' || p === '/api/webhooks/luc-paguei') &&
+    method === 'POST'
+  ) {
+    try {
+      const result = applyLucWebhook(store, body);
+      return send(res, 200, result);
+    } catch (e) {
+      console.error('luc webhook', e);
+      return send(res, 200, { ok: true, error: e.message });
+    }
+  }
+
+  if (p === '/api/futgreen/deposits/pix' && method === 'POST') {
+    try {
+      const amountCents = Math.round(Number(body.amount_cents ?? Number(body.amount) * 100));
+      const result = await createPixDeposit(store, {
+        userId: ctx.user.id,
+        amountCents,
+        dest: body.dest || 'apostador',
+        payer: {
+          name: body.payer_name || body.name || ctx.user.name,
+          email: body.payer_email || body.email || ctx.user.email,
+          document: body.cpf || body.document || body.payer_document || ctx.user.cpf,
+        },
+        note: body.note || null,
+      });
+      return send(res, 201, result);
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message, code: e.code });
+    }
+  }
+
+  if (p === '/api/futgreen/deposits/pix' && method === 'GET') {
+    try {
+      const id = url.searchParams.get('id');
+      if (!id) return send(res, 400, { error: 'id obrigatório' });
+      const deposit = getUserDeposit(store, { depositId: id, userId: ctx.user.id });
+      return send(res, 200, { deposit, auto_confirm: isAutoConfirmGateway() });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  if (p === '/api/futgreen/deposits/pix-config' && method === 'GET') {
+    return send(res, 200, {
+      luc_ready: isLucReady(),
+      auto_confirm: isAutoConfirmGateway(),
+      ...publicDepositSettings(store),
+    });
+  }
+
+  if (p === '/api/futgreen/settings/deposit' && method === 'GET') {
+    requireAdmin(ctx);
+    return send(res, 200, {
+      ...publicDepositSettings(store),
+      luc_ready: isLucReady(),
+      auto_confirm: isAutoConfirmGateway(),
+    });
+  }
+
+  if (p === '/api/futgreen/settings/deposit' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      const settings = setMinDepositReais(store, body.min_deposit_reais ?? body.amount ?? body.min);
+      return send(res, 200, {
+        ok: true,
+        ...publicDepositSettings(store),
+        settings,
+      });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
   if (p === '/api/futgreen/deposit-proof' && method === 'POST') {
+    // Preferir PIX automático quando Luc estiver configurado e CPF enviado
+    const wantsPix = body.pix !== false && body.manual !== true;
+    const cpf = String(body.cpf || body.document || body.payer_document || '').replace(/\D/g, '');
+    const amountCentsProof = Math.round(Number(body.amount_cents ?? Number(body.amount) * 100));
+    const minCents = getMinDepositCents(store);
+    if (!(amountCentsProof >= minCents)) {
+      const minReais = (minCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      return send(res, 400, { error: `Depósito mínimo ${minReais}`, code: 'MIN_DEPOSIT', min_deposit_cents: minCents });
+    }
+    if (wantsPix && isLucReady() && cpf.length === 11) {
+      try {
+        const result = await createPixDeposit(store, {
+          userId: ctx.user.id,
+          amountCents: amountCentsProof,
+          dest: body.dest || 'apostador',
+          payer: {
+            name: body.payer_name || body.name || ctx.user.name,
+            email: body.payer_email || ctx.user.email,
+            document: cpf,
+          },
+          note: body.note || null,
+        });
+        return send(res, 201, result);
+      } catch (e) {
+        return send(res, e.status || 400, { error: e.message, code: e.code });
+      }
+    }
     const dep = {
       id: store.nextId('dep'),
       user_id: ctx.user.id,
-      amount_cents: Math.round(Number(body.amount_cents ?? Number(body.amount) * 100)),
+      amount_cents: amountCentsProof,
       dest: body.dest || 'apostador', // apostador | desafio | provedor
       status: 'pending',
+      channel: 'manual',
       note: body.note || null,
       proof_ref: body.proof_ref || null,
       created_at: new Date().toISOString(),
     };
     store.data.manual_deposits.push(dep);
     store.save();
-    return send(res, 201, { deposit: dep });
+    return send(res, 201, { deposit: publicDepositView(dep) });
   }
 
   if (p === '/api/futgreen/approveManualDeposit' && method === 'POST') {
     requireAdmin(ctx);
     const dep = store.data.manual_deposits.find((d) => d.id === body.deposit_id);
     if (!dep) return send(res, 404, { error: 'Depósito não encontrado' });
-    if (dep.status !== 'pending') {
+    if (dep.status !== 'pending' && dep.status !== 'gateway_paid') {
       return send(res, 400, { error: 'Depósito não está pendente' });
     }
     if (body.mark_only) {
@@ -1163,22 +1365,16 @@ async function handleApi(req, res, url) {
       store.save();
       return send(res, 200, { deposit: dep });
     }
-    const u = store.getUser(dep.user_id);
-    const bucket =
-      dep.dest === 'desafio'
-        ? 'desafio_balance_cents'
-        : dep.dest === 'provedor'
-          ? 'investor_balance_cents'
-          : 'balance_cents';
-    u.wallet[bucket] = (u.wallet[bucket] || 0) + dep.amount_cents;
-    dep.status = 'credited';
-    dep.approved_by = ctx.adminEmail;
-    dep.approved_at = new Date().toISOString();
-    const type =
-      dep.dest === 'desafio' ? 'desafio_deposit' : dep.dest === 'provedor' ? 'provider_deposit' : 'manual_deposit';
-    store.addTx({ user_id: u.id, type, amount_cents: dep.amount_cents, bucket, ref_id: dep.id });
-    store.save();
-    return send(res, 200, { deposit: dep, wallet: u.wallet });
+    try {
+      const result = creditDeposit(store, {
+        depositId: dep.id,
+        adminEmail: ctx.adminEmail,
+        source: 'admin',
+      });
+      return send(res, 200, { deposit: result.deposit, wallet: result.wallet });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
   }
 
   if (p === '/api/futgreen/manual-deposits/reject' && method === 'POST') {
@@ -1304,15 +1500,26 @@ async function handleApi(req, res, url) {
   if (p === '/api/futgreen/users' && method === 'GET') {
     requireAdmin(ctx);
     return send(res, 200, {
-      users: store.data.users.map((u) => ({
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        is_active: isUserActive(u),
-        created_at: u.created_at || null,
-        wallet: u.wallet,
-      })),
+      users: store.data.users.map((u) => {
+        const code = ensureReferralCode(store, u);
+        const referrer = u.referred_by ? store.getUser(u.referred_by) : null;
+        return {
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          role: u.role,
+          is_active: isUserActive(u),
+          is_blocked: isUserBlocked(u),
+          deposit_only: isDepositOnly(u),
+          created_at: u.created_at || null,
+          wallet: u.wallet,
+          referral_code: code,
+          referral_url: buildReferralUrl(code),
+          referred_by: u.referred_by || null,
+          referred_by_name: referrer?.name || null,
+          referrals_count: referralStats(store, u.id).count,
+        };
+      }),
     });
   }
 
@@ -1333,11 +1540,61 @@ async function handleApi(req, res, url) {
         name: user.name,
         role: user.role,
         is_active: isUserActive(user),
+        is_blocked: isUserBlocked(user),
       },
     });
   }
 
+  if (p === '/api/futgreen/users/set-blocked' && method === 'POST') {
+    requireAdmin(ctx);
+    const userId = body.user_id || body.id;
+    const user = store.getUser(userId) || store.getUserByEmail(body.email);
+    if (!user) return send(res, 404, { error: 'Usuário não encontrado' });
+    if (user.id === ctx.user.id && !ctx.impersonating) {
+      return send(res, 400, { error: 'Você não pode bloquear a própria conta' });
+    }
+    if (isAdminEmail(user.email, ALLOWED_ADMINS)) {
+      return send(res, 400, { error: 'Não é permitido bloquear um administrador da allowlist' });
+    }
+    const next = body.is_blocked === true || body.blocked === true || body.block === true;
+    user.is_blocked = next;
+    user.blocked_at = next ? new Date().toISOString() : null;
+    user.blocked_by = next ? ctx.adminEmail || ctx.user.email : null;
+    if (body.reason != null) user.blocked_reason = next ? String(body.reason).slice(0, 200) : null;
+    store.save();
+    return send(res, 200, {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        is_active: isUserActive(user),
+        is_blocked: isUserBlocked(user),
+      },
+    });
+  }
+
+  if (p === '/api/futgreen/users/delete' && method === 'POST') {
+    requireAdmin(ctx);
+    const userId = body.user_id || body.id;
+    const user = store.getUser(userId) || store.getUserByEmail(body.email);
+    if (!user) return send(res, 404, { error: 'Usuário não encontrado' });
+    if (user.id === ctx.user.id && !ctx.impersonating) {
+      return send(res, 400, { error: 'Você não pode excluir a própria conta' });
+    }
+    if (isAdminEmail(user.email, ALLOWED_ADMINS)) {
+      return send(res, 400, { error: 'Não é permitido excluir um administrador da allowlist' });
+    }
+    const removed = store.deleteUser(user.id);
+    return send(res, 200, {
+      ok: true,
+      deleted: { id: removed.id, email: removed.email, name: removed.name },
+    });
+  }
+
   if (p === '/api/futgreen/me' && method === 'GET') {
+    const code = ensureReferralCode(store, ctx.user);
+    const depositOnly = isDepositOnly(ctx.user);
     return send(res, 200, {
       user: {
         id: ctx.user.id,
@@ -1345,10 +1602,95 @@ async function handleApi(req, res, url) {
         name: ctx.user.name,
         role: ctx.user.role,
         is_active: isUserActive(ctx.user),
+        is_blocked: isUserBlocked(ctx.user),
+        deposit_only: depositOnly,
+        cpf: ctx.user.cpf || ctx.user.document || null,
+        phone: ctx.user.phone || null,
+        pix_key: ctx.user.pix_key || null,
+        created_at: ctx.user.created_at || null,
+        referral_code: code,
+        referral_url: buildReferralUrl(code),
       },
       wallet: ctx.user.wallet,
+      deposit_only: depositOnly,
       admin: Boolean(ctx.adminEmail),
       impersonating: ctx.impersonating,
+    });
+  }
+
+  if (p === '/api/futgreen/me' && method === 'POST') {
+    if (isUserBlocked(ctx.user) && !ctx.adminEmail) {
+      return send(res, 403, { error: 'Conta bloqueada pelo administrador', code: 'account_blocked' });
+    }
+    const user = store.getUser(ctx.user.id);
+    if (!user) return send(res, 404, { error: 'Usuário não encontrado' });
+
+    const name = body.name != null ? String(body.name).trim().slice(0, 80) : null;
+    if (name !== null) {
+      if (!name) return send(res, 400, { error: 'Informe um nome válido' });
+      user.name = name;
+    }
+
+    if (body.phone != null) {
+      const phone = String(body.phone).replace(/[^\d+()\s-]/g, '').trim().slice(0, 32);
+      user.phone = phone || null;
+    }
+
+    if (body.cpf != null || body.document != null) {
+      const cpf = String(body.cpf ?? body.document ?? '').replace(/\D/g, '');
+      if (cpf && cpf.length !== 11) {
+        return send(res, 400, { error: 'CPF deve ter 11 dígitos' });
+      }
+      user.cpf = cpf || null;
+      user.document = user.cpf;
+    }
+
+    if (body.pix_key != null) {
+      const pix = String(body.pix_key).trim().slice(0, 120);
+      user.pix_key = pix || null;
+    }
+
+    user.updated_at = new Date().toISOString();
+    store.save();
+    const code = ensureReferralCode(store, user);
+    return send(res, 200, {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        is_active: isUserActive(user),
+        is_blocked: isUserBlocked(user),
+        cpf: user.cpf || null,
+        phone: user.phone || null,
+        pix_key: user.pix_key || null,
+        created_at: user.created_at || null,
+        referral_code: code,
+        referral_url: buildReferralUrl(code),
+      },
+      wallet: user.wallet,
+    });
+  }
+
+  if (p === '/api/futgreen/referral' && method === 'GET') {
+    const code = ensureReferralCode(store, ctx.user);
+    const stats = referralStats(store, ctx.user.id);
+    return send(res, 200, {
+      code,
+      url: buildReferralUrl(code),
+      count: stats.count,
+      users: stats.users,
+    });
+  }
+
+  if (p === '/api/futgreen/referral/lookup' && method === 'GET') {
+    const code = url.searchParams.get('code') || url.searchParams.get('ref') || '';
+    const referrer = findUserByReferralCode(store, code);
+    if (!referrer) return send(res, 404, { error: 'Código de indicação inválido' });
+    ensureReferralCode(store, referrer);
+    return send(res, 200, {
+      code: referrer.referral_code,
+      name: referrer.name || referrer.email.split('@')[0],
     });
   }
 
@@ -1364,9 +1706,13 @@ async function handleApi(req, res, url) {
       role: asAdmin ? 'admin' : 'client',
       password_hash: await hashPassword(password),
       wallet: emptyWallet(),
-      // Novos clientes ficam pendentes até o admin ativar
+      // Novos clientes: acesso só depósito até o 1º PIX creditado
       is_active: asAdmin,
     });
+    ensureReferralCode(store, user);
+    const refCode = body.ref || body.referral_code || body.referred_by_code || '';
+    if (refCode) attachReferrer(store, user, refCode);
+    const depositOnly = isDepositOnly(user);
     return send(res, 201, {
       user: {
         id: user.id,
@@ -1374,8 +1720,11 @@ async function handleApi(req, res, url) {
         name: user.name,
         role: user.role,
         is_active: isUserActive(user),
+        deposit_only: depositOnly,
+        referral_code: user.referral_code,
       },
-      pending_activation: !isUserActive(user),
+      deposit_only: depositOnly,
+      pending_activation: depositOnly,
     });
   }
 
@@ -1391,20 +1740,24 @@ async function handleApi(req, res, url) {
     }
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) return send(res, 401, { error: 'Credenciais inválidas' });
-    if (!isUserActive(user)) {
+    if (isUserBlocked(user)) {
       return send(res, 403, {
-        error: 'Conta aguardando ativação pelo administrador',
-        code: 'account_pending',
+        error: 'Conta bloqueada pelo administrador',
+        code: 'account_blocked',
       });
     }
+    const depositOnly = isDepositOnly(user);
     return send(res, 200, {
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
-        is_active: true,
+        is_active: isUserActive(user),
+        is_blocked: false,
+        deposit_only: depositOnly,
       },
+      deposit_only: depositOnly,
     });
   }
 
@@ -1514,6 +1867,14 @@ const server = http.createServer(async (req, res) => {
       return await handleApi(req, res, url);
     }
 
+    // Atalho curto: /r/{codigo} → cadastro com ref
+    const shortRef = url.pathname.match(/^\/r\/([a-zA-Z0-9_-]{4,32})\/?$/);
+    if (shortRef) {
+      res.writeHead(302, { Location: `/cadastro.html?ref=${encodeURIComponent(shortRef[1].toLowerCase())}` });
+      res.end();
+      return;
+    }
+
     return serveStatic(req, res, url.pathname);
   } catch (e) {
     console.error(e);
@@ -1532,6 +1893,8 @@ async function boot() {
       console.log(`Local auth: senhas seed aplicadas (${LOCAL_DEV_PASSWORD})`);
     }
   }
+  startLiveScoreScheduler(store, { intervalMs: 45_000 });
+  console.log('Live score sync: ON (TheSportsDB · 45s)');
   const onListen = () => {
     const where = LISTEN_HOST ? `${LISTEN_HOST}:${PORT}` : `0.0.0.0:${PORT}`;
     console.log(`FutGreen listening on http://${where}`);

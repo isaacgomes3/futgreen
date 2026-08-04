@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Meu perfil · FUTGREEN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Meu perfil</h2>
+        <p class="fg-meta" style="margin:0 0 1rem">Dados cadastrais e saldos da conta.</p>
+        <form id="profile-form" class="fg-form fg-match" style="max-width:36rem">
+          <label>Nome
+            <input name="name" type="text" autocomplete="name" required maxlength="80" disabled />
+          </label>
+          <label>E-mail
+            <input name="email" type="email" readonly disabled />
+          </label>
+          <label>CPF
+            <input name="cpf" type="text" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" disabled />
+          </label>
+          <label>Telefone
+            <input name="phone" type="tel" autocomplete="tel" maxlength="32" placeholder="(00) 00000-0000" disabled />
+          </label>
+          <label>Chave PIX
+            <input name="pix_key" type="text" maxlength="120" placeholder="e-mail, CPF ou chave" disabled />
+          </label>
+          <p class="fg-meta" id="profile-meta" style="margin:0"></p>
+          <div class="fg-cta-row" style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <button type="button" class="fg-btn" id="btn-edit">Editar</button>
+            <button type="submit" class="fg-btn" id="btn-save" hidden>Salvar</button>
+            <button type="button" class="fg-btn ghost" id="btn-cancel" hidden>Cancelar</button>
+          </div>
+        </form>
+      </section>
+      <section class="fg-section">
+        <h2>Dados financeiros</h2>
+        <div id="cards"></div>
+      </section>
+      <section class="fg-section">
+        <h2>Últimos lançamentos</h2>
+        <div id="extrato"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, toast } from '/public/js/api.js';
+    import { renderWalletCards, renderExtrato } from '/public/js/v2-financeiro.js';
+
+    await mountShell();
+
+    const form = document.getElementById('profile-form');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnSave = document.getElementById('btn-save');
+    const btnCancel = document.getElementById('btn-cancel');
+    const editable = ['name', 'cpf', 'phone', 'pix_key'];
+    let snapshot = null;
+
+    function formatCpf(raw) {
+      const d = String(raw || '').replace(/\D/g, '').slice(0, 11);
+      if (d.length <= 3) return d;
+      if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+      if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+      return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+    }
+
+    function setEditing(on) {
+      for (const name of editable) {
+        form.elements[name].disabled = !on;
+      }
+      btnEdit.hidden = on;
+      btnSave.hidden = !on;
+      btnCancel.hidden = !on;
+    }
+
+    function fillForm(user) {
+      form.elements.name.value = user.name || '';
+      form.elements.email.value = user.email || '';
+      form.elements.cpf.value = formatCpf(user.cpf || '');
+      form.elements.phone.value = user.phone || '';
+      form.elements.pix_key.value = user.pix_key || '';
+      const bits = [];
+      if (user.role) bits.push(user.role);
+      if (user.is_blocked) bits.push('bloqueada');
+      else if (user.is_active === false) bits.push('pendente');
+      else bits.push('ativa');
+      if (user.created_at) {
+        bits.push(`desde ${new Date(user.created_at).toLocaleDateString('pt-BR')}`);
+      }
+      document.getElementById('profile-meta').textContent = bits.join(' · ');
+      snapshot = {
+        name: form.elements.name.value,
+        cpf: form.elements.cpf.value,
+        phone: form.elements.phone.value,
+        pix_key: form.elements.pix_key.value,
+      };
+    }
+
+    form.elements.cpf.addEventListener('input', (e) => {
+      e.target.value = formatCpf(e.target.value);
+    });
+
+    const me = await api('/api/futgreen/me');
+    fillForm(me.user || {});
+    await renderWalletCards(document.getElementById('cards'));
+    await renderExtrato(document.getElementById('extrato'), { limit: 30 });
+
+    btnEdit.onclick = () => setEditing(true);
+    btnCancel.onclick = () => {
+      if (snapshot) {
+        form.elements.name.value = snapshot.name;
+        form.elements.cpf.value = snapshot.cpf;
+        form.elements.phone.value = snapshot.phone;
+        form.elements.pix_key.value = snapshot.pix_key;
+      }
+      setEditing(false);
+    };
+
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const cpf = String(fd.get('cpf') || '').replace(/\D/g, '');
+      if (cpf && cpf.length !== 11) return toast('Informe um CPF válido');
+      try {
+        const data = await api('/api/futgreen/me', {
+          method: 'POST',
+          body: {
+            name: fd.get('name'),
+            cpf,
+            phone: fd.get('phone'),
+            pix_key: fd.get('pix_key'),
+          },
+        });
+        fillForm(data.user || {});
+        setEditing(false);
+        toast('Perfil salvo');
+      } catch (err) {
+        toast(err.message || 'Falha ao salvar');
+      }
+    };
+  </script>
+</body>
+</html>

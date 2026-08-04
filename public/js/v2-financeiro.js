@@ -45,7 +45,7 @@ export async function renderWalletCards(container) {
     'deduction_balance_cents',
     'desafio_balance_cents',
     'investor_balance_cents',
-    'demo_balance_cents',
+    // Demo não aparece para cliente (só workshop local)
   ];
   container.innerHTML = `
     <div class="fg-grid">

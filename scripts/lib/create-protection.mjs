@@ -6,10 +6,42 @@ import {
 } from './protection-flow-contract.mjs';
 
 /**
+ * Liquidez do mercado (R$) vs proteções ativas (amount_cents).
+ * Sem liquidez cadastrada → total 0 (barra oculta no cliente).
+ */
+export function matchLiquidityStats(store, match) {
+  const total = Number(match?.liquidity ?? match?.liquidez);
+  const totalReais = Number.isFinite(total) && total > 0 ? total : 0;
+  if (!(totalReais > 0)) {
+    return {
+      liquidity: 0,
+      liquidity_used: 0,
+      liquidity_remaining: 0,
+      liquidity_pct_used: 0,
+      liquidity_pct_remaining: 0,
+    };
+  }
+  const usedCents = (store.data.protections || [])
+    .filter((p) => p.match_id === match.id && p.status === 'active')
+    .reduce((s, p) => s + (Number(p.amount_cents) || 0), 0);
+  const used = Math.round(usedCents) / 100;
+  const remaining = Math.max(0, Math.round((totalReais - used) * 100) / 100);
+  const pctUsed = Math.min(100, Math.round((used / totalReais) * 1000) / 10);
+  return {
+    liquidity: totalReais,
+    liquidity_used: used,
+    liquidity_remaining: remaining,
+    liquidity_pct_used: pctUsed,
+    liquidity_pct_remaining: Math.max(0, Math.round((100 - pctUsed) * 10) / 10),
+  };
+}
+
+/**
  * Cria proteção (indicação Proteger) — v12:
  * - NÃO trava stake / NÃO move Saldo Apostador
  * - Registra valor da entrada BetBra (stake ou responsabilidade)
  * - Teto 50% do Apostador como cobertura máxima de reembolso
+ * - Liquidez do mercado (quando cadastrada) limita o disponível
  * - 1 op ativa por user+match
  */
 export function createProtection(store, { userId, matchId, side, odd, amountCents, now = new Date() }) {
@@ -54,6 +86,25 @@ export function createProtection(store, { userId, matchId, side, odd, amountCent
       new Error(`Teto 50%: cobertura máxima ${maxCover} cents sobre o Saldo Apostador`),
       { status: 400, code: 'STAKE_CAP' },
     );
+  }
+
+  const liq = matchLiquidityStats(store, match);
+  if (liq.liquidity > 0) {
+    const remainingCents = Math.round(liq.liquidity_remaining * 100);
+    if (remainingCents <= 0) {
+      throw Object.assign(new Error('Liquidez esgotada neste mercado'), {
+        status: 400,
+        code: 'LIQUIDITY_EMPTY',
+      });
+    }
+    if (amount > remainingCents) {
+      throw Object.assign(
+        new Error(
+          `Liquidez insuficiente: disponível R$ ${liq.liquidity_remaining.toFixed(2)} de R$ ${liq.liquidity.toFixed(2)}`,
+        ),
+        { status: 400, code: 'LIQUIDITY_CAP' },
+      );
+    }
   }
 
   // v12: sem trava — carteira intacta

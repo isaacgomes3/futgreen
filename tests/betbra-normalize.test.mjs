@@ -141,3 +141,19 @@ test('carrinho resolve odds back/lay independentes', () => {
   assert.equal(fields.selection_name, 'Flamengo');
   assert.match(fields.label, /Match Odds · Flamengo BACK/);
 });
+
+test('carrinho liquidez individual por seleção', () => {
+  const detail = normalizeEventDetail(sample);
+  const resolved = resolveCartSelections(detail, [
+    { market_id: 'm1', runner_name: 'Flamengo', side: 'BACK', odd: 2.1, liquidity: 1500 },
+    { market_id: 'm2', runner_name: 'Over 2.5', side: 'LAY', odd: 2.0 },
+  ]);
+  assert.equal(resolved[0].selection.liquidity, 1500);
+  assert.equal(resolved[1].selection.liquidity, undefined); // vazio = sem liquidez
+  const f0 = selectionToMatchFields(detail, resolved[0].market, resolved[0].selection);
+  const f1 = selectionToMatchFields(detail, resolved[1].market, resolved[1].selection);
+  assert.equal(f0.liquidity, 1500);
+  assert.equal(f0.volume, 1500);
+  assert.equal(f1.liquidity, 0);
+  assert.equal(f1.volume, 1200); // volume do mercado intacto
+});

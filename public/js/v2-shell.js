@@ -1,4 +1,4 @@
-import { api, brl, getEmail, setEmail, getImpersonate, setImpersonate } from './api.js';
+import { api, brl, getEmail, setEmail, getImpersonate, setImpersonate, logout, isLoggedIn } from './api.js';
 import { BRAND, brandLink, injectFavicons } from './brand.js';
 
 const CLIENT_LINKS = [
@@ -7,7 +7,15 @@ const CLIENT_LINKS = [
   { href: '/app-protecoes.html', label: 'Minhas Proteções', ico: '◎', group: 'OPERAÇÕES' },
   { href: '/app-desafio.html', label: 'Jornada', ico: '⚡', group: 'OPERAÇÕES', novo: true },
   { href: '/app-carteira.html', label: 'Carteira', ico: '₿', group: 'OPERAÇÕES' },
+  { href: '/app-indicacao.html', label: 'Indicação', ico: '↗', group: 'OPERAÇÕES' },
 ];
+
+/** Menu enquanto a conta aguarda o 1º depósito PIX creditado */
+const DEPOSIT_ONLY_LINKS = [
+  { href: '/app-carteira.html', label: 'Depósito', ico: '₿', group: 'COMECE AQUI' },
+];
+
+const DEPOSIT_ONLY_PATHS = ['/app-carteira.html', '/app-perfil.html'];
 
 const ADMIN_LINKS = [
   { href: '/admin-jogos.html', label: 'Jogos', ico: '▣', group: 'ADMIN' },
@@ -40,7 +48,7 @@ function renderGroups(links) {
         .filter((l) => (l.group || 'MENU') === g)
         .map((l) => {
           const active = pathActive(l.href) ? ' is-active' : '';
-          const badge = l.novo ? '<span class="fg-badge-novo">NOVO</span>' : '';
+          const badge = l.novo ? '<span class="fg-badge-novo">EM BREVE</span>' : '';
           return `<a class="fg-side-link${active}" href="${l.href}"><span class="ico">${l.ico || '•'}</span>${l.label}${badge}</a>`;
         })
         .join('');
@@ -59,13 +67,28 @@ export async function mountShell({ admin = false } = {}) {
     }
   }
 
+  if (!isLoggedIn()) {
+    location.replace(`/entrar.html?next=${encodeURIComponent(location.pathname + location.search)}`);
+    throw new Error('auth_required');
+  }
+
   const root = document.getElementById('fg-shell-root') || document.body;
 
   let me = null;
   try {
     me = await api('/api/futgreen/me');
-  } catch {
+  } catch (err) {
+    if (err?.status === 401 || err?.data?.code === 'auth_required') {
+      logout({ redirect: '/entrar.html' });
+      throw new Error('auth_required');
+    }
     me = { wallet: {}, user: { email: getEmail(), name: 'Cliente' }, admin: false };
+  }
+
+  // Área admin: só allowlist — sem auto-login
+  if (admin && !me.admin) {
+    location.replace('/app.html');
+    throw new Error('admin_required');
   }
 
   const imp = getImpersonate();
@@ -83,8 +106,18 @@ export async function mountShell({ admin = false } = {}) {
 
   const w = me.wallet || {};
   const name = me.user?.name || me.user?.email?.split('@')[0] || 'User';
-  const links = admin ? ADMIN_LINKS : CLIENT_LINKS;
-  const home = admin ? '/admin-jogos.html' : '/app.html';
+  const depositOnly = !admin && Boolean(me.deposit_only || me.user?.deposit_only);
+  const links = admin ? ADMIN_LINKS : depositOnly ? DEPOSIT_ONLY_LINKS : CLIENT_LINKS;
+  const home = admin ? '/admin-jogos.html' : depositOnly ? '/app-carteira.html' : '/app.html';
+
+  if (depositOnly) {
+    const here = location.pathname.replace(/\/$/, '') || '/';
+    const allowed = DEPOSIT_ONLY_PATHS.some((p) => here === p || here.endsWith(p));
+    if (!allowed) {
+      location.replace('/app-carteira.html');
+      throw new Error('deposit_required');
+    }
+  }
 
   const overlay = document.createElement('div');
   overlay.className = 'fg-nav-overlay';
@@ -103,23 +136,36 @@ export async function mountShell({ admin = false } = {}) {
       ${renderGroups(links)}
       <div class="fg-nav-group">SISTEMA</div>
       ${
-        admin
-          ? '<a class="fg-side-link" href="/app.html"><span class="ico">↩</span>Modo usuário</a>'
-          : '<a class="fg-side-link" href="/admin-jogos.html"><span class="ico">⌘</span>Modo ADM</a>'
+        depositOnly
+          ? ''
+          : admin
+            ? '<a class="fg-side-link" href="/app.html"><span class="ico">↩</span>Modo usuário</a>'
+            : '<a class="fg-side-link" href="/admin-jogos.html"><span class="ico">⌘</span>Modo ADM</a>'
       }
       <a class="fg-side-link" href="/"><span class="ico">⌂</span>Site</a>
+      <button type="button" class="fg-side-link fg-logout-btn" id="fg-logout">
+        <span class="ico">⎋</span>Sair
+      </button>
     </nav>
     <div class="fg-side-foot">
-      <div class="fg-user-card">
-        <img class="fg-avatar-brand" src="${BRAND.avatar}" width="38" height="38" alt="${BRAND.name}" />
+      <a class="fg-user-card${pathActive('/app-perfil.html') ? ' is-active' : ''}" href="/app-perfil.html" title="Abrir meu perfil" aria-label="Abrir perfil de ${name}">
+        <img class="fg-avatar-brand" src="${BRAND.avatar}" width="38" height="38" alt="" />
         <div>
           <strong>${name}</strong>
-          <span>${brl(w.balance_cents)} · Apostador</span>
+          <span>${depositOnly ? 'Aguardando depósito' : `${brl(w.balance_cents)} · Apostador`}</span>
         </div>
-      </div>
+      </a>
     </div>
   `;
   document.body.prepend(sidebar);
+
+  if (depositOnly) {
+    const ban = document.createElement('div');
+    ban.className = 'fg-banner fg-banner-deposit';
+    ban.innerHTML =
+      'Conta criada. <strong>Faça o depósito PIX</strong> para liberar Proteger, Jornada e as demais funções.';
+    root.prepend(ban);
+  }
 
   const topbar = document.createElement('header');
   topbar.className = 'fg-topbar';
@@ -132,29 +178,48 @@ export async function mountShell({ admin = false } = {}) {
     </div>
     <div class="fg-bal-strip" id="fg-balance-chips">
       <div class="fg-bal"><small>Apostador</small><strong>${brl(w.balance_cents)}</strong></div>
-      <div class="fg-bal"><small>Reembolso</small><strong>${brl(w.deduction_balance_cents)}</strong></div>
-      <div class="fg-bal"><small>Jornada</small><strong>${brl(w.desafio_balance_cents)}</strong></div>
+      ${
+        depositOnly
+          ? ''
+          : `<div class="fg-bal"><small>Reembolso</small><strong>${brl(w.deduction_balance_cents)}</strong></div>
+      <div class="fg-bal"><small>Jornada</small><strong>${brl(w.desafio_balance_cents)}</strong></div>`
+      }
     </div>
     <div class="fg-top-actions">
-      ${admin ? '<a class="fg-btn ghost fg-hide-xs" href="/app.html">Modo usuário</a>' : '<a class="fg-btn ghost fg-hide-xs" href="/admin-jogos.html">Modo ADM</a>'}
-      <a class="fg-btn" href="/app-carteira.html">+ Depósito</a>
+      ${
+        depositOnly
+          ? ''
+          : admin
+            ? '<a class="fg-btn ghost fg-hide-xs" href="/app.html">Modo usuário</a>'
+            : '<a class="fg-btn ghost fg-hide-xs" href="/admin-jogos.html">Modo ADM</a>'
+      }
+      <a class="fg-btn fg-btn-deposit" href="/app-carteira.html"><span class="fg-btn-label-full">+ Depósito</span><span class="fg-btn-label-short" aria-hidden="true">+</span></a>
+      <button type="button" class="fg-btn ghost fg-hide-xs" id="fg-logout-top" title="Sair">Sair</button>
     </div>
   `;
   root.prepend(topbar);
 
-  const emailBar = document.createElement('div');
-  emailBar.className = 'fg-devbar';
-  emailBar.innerHTML = `
+  // Barra de trocar e-mail só no ambiente local (não em produção)
+  let isLocal = false;
+  try {
+    const health = await fetch('/health').then((r) => r.json());
+    isLocal = Boolean(health.local);
+  } catch { /* ignore */ }
+  if (isLocal) {
+    const emailBar = document.createElement('div');
+    emailBar.className = 'fg-devbar';
+    emailBar.innerHTML = `
     <label>Sessão local
       <input id="fg-email-input" value="${getEmail()}" />
     </label>
     <button type="button" class="fg-btn ghost" id="fg-email-save" style="padding:0.3rem 0.65rem;font-size:0.75rem">Trocar</button>
   `;
-  topbar.after(emailBar);
-  emailBar.querySelector('#fg-email-save').onclick = () => {
-    setEmail(emailBar.querySelector('#fg-email-input').value.trim());
-    location.reload();
-  };
+    topbar.after(emailBar);
+    emailBar.querySelector('#fg-email-save').onclick = () => {
+      setEmail(emailBar.querySelector('#fg-email-input').value.trim());
+      location.reload();
+    };
+  }
 
   const menuBtn = topbar.querySelector('.fg-menu-toggle');
   const closeBtn = sidebar.querySelector('.fg-sidebar-close');
@@ -176,6 +241,12 @@ export async function mountShell({ admin = false } = {}) {
   window.addEventListener('resize', () => {
     if (window.innerWidth > 900) setNavOpen(false);
   });
+
+  function doLogout() {
+    logout({ redirect: '/entrar.html' });
+  }
+  sidebar.querySelector('#fg-logout')?.addEventListener('click', doLogout);
+  topbar.querySelector('#fg-logout-top')?.addEventListener('click', doLogout);
 
   queueMicrotask(() => {
     document.querySelectorAll('.fg-table').forEach((table) => {

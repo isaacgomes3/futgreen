@@ -449,7 +449,7 @@ export function buildFinanceMonitor(store, { day } = {}) {
 export function rejectManualDeposit(store, { depositId, adminEmail, note }) {
   const dep = store.data.manual_deposits.find((d) => d.id === depositId);
   if (!dep) throw Object.assign(new Error('Depósito não encontrado'), { status: 404 });
-  if (dep.status !== 'pending') {
+  if (dep.status !== 'pending' && dep.status !== 'gateway_paid') {
     throw Object.assign(new Error('Depósito não está pendente'), { status: 400 });
   }
   dep.status = 'rejected';

@@ -3,13 +3,14 @@ import {
   calcIndicationEconomics,
   resolveCanonicalOdd,
   LOCKS_STAKE_ON_CREATE,
+  assertPreKickoff,
 } from './protection-flow-contract.mjs';
 
 /**
  * Liquidação admin: REEMBOLSO / GANHO / ANULA / CANCELAR
  * v12: entrada sem trava — GANHO/ANULA sem movimento; REEMBOLSO credita Saldo Reembolso.
  */
-export function settleProtection(store, { protectionId, outcome, adminEmail }) {
+export function settleProtection(store, { protectionId, outcome, adminEmail, cancelledBy = null }) {
   const p = store.data.protections.find((x) => x.id === protectionId);
   if (!p) throw Object.assign(new Error('Proteção não encontrada'), { status: 404 });
   if (p.status !== 'active') {
@@ -66,7 +67,7 @@ export function settleProtection(store, { protectionId, outcome, adminEmail }) {
     p.status = 'settled_ganho';
     p.result = 'ganho';
   } else if (oc === PROTECTION_OUTCOMES.ANULA || oc === PROTECTION_OUTCOMES.CANCELAR) {
-    // Empate anula / void: sem P&L
+    // Empate anula / void / cancelamento: sem P&L
     if (didLock) {
       user.wallet.balance_cents = (user.wallet.balance_cents || 0) + stake;
     }
@@ -78,16 +79,52 @@ export function settleProtection(store, { protectionId, outcome, adminEmail }) {
       amount_cents: didLock ? stake : 0,
       bucket: 'balance_cents',
       ref_id: p.id,
-      meta: { outcome: oc, admin: adminEmail, note: 'sem_pl' },
+      meta: {
+        outcome: oc,
+        admin: adminEmail,
+        cancelled_by_client: cancelledBy || null,
+        note: cancelledBy ? 'client_cancel_pre_kickoff' : 'sem_pl',
+      },
     });
   } else {
     throw Object.assign(new Error('outcome inválido'), { status: 400 });
   }
 
   p.settled_at = new Date().toISOString();
-  p.settled_by = adminEmail || null;
+  p.settled_by = adminEmail || (cancelledBy ? `client:${cancelledBy}` : null);
   store.save();
   return p;
+}
+
+/**
+ * Cliente cancela a própria proteção ativa — só antes do kickoff.
+ * Mesmo efeito de cancelar admin: sem P&L (entrada sem trava).
+ */
+export function cancelProtectionByClient(store, { protectionId, userId, now = new Date() }) {
+  const p = store.data.protections.find((x) => x.id === protectionId);
+  if (!p) throw Object.assign(new Error('Proteção não encontrada'), { status: 404 });
+  if (p.user_id !== userId) {
+    throw Object.assign(new Error('Proteção de outro usuário'), { status: 403, code: 'NOT_OWNER' });
+  }
+  if (p.status !== 'active') {
+    throw Object.assign(new Error('Proteção não está ativa'), { status: 400 });
+  }
+  const match = store.data.matches.find((m) => m.id === p.match_id);
+  if (!match) throw Object.assign(new Error('Evento não encontrado'), { status: 404 });
+  try {
+    assertPreKickoff(match.starts_at, now);
+  } catch (e) {
+    throw Object.assign(new Error('Cancelamento só antes do início da partida'), {
+      status: 400,
+      code: 'PRE_KICKOFF',
+    });
+  }
+  return settleProtection(store, {
+    protectionId,
+    outcome: PROTECTION_OUTCOMES.CANCELAR,
+    adminEmail: null,
+    cancelledBy: userId,
+  });
 }
 
 /** Encerrar sem estorno (protection-close) */

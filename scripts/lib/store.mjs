@@ -16,6 +16,9 @@ const DEFAULT_DATA = () => ({
   expenses: [],
   area_entries: [],
   treasury_moves: [],
+  settings: {
+    min_deposit_cents: 10000, // R$ 100,00
+  },
   sessions: {},
   football_teams: [
     { id: 'flamengo', name: 'Flamengo', logo: '/assets/teams/flamengo.svg' },
@@ -59,6 +62,12 @@ export class Store {
     if (!Array.isArray(this.data.expenses)) this.data.expenses = [];
     if (!Array.isArray(this.data.area_entries)) this.data.area_entries = [];
     if (!Array.isArray(this.data.treasury_moves)) this.data.treasury_moves = [];
+    if (!this.data.settings || typeof this.data.settings !== 'object') {
+      this.data.settings = { min_deposit_cents: 10000 };
+    }
+    if (!Number.isFinite(Number(this.data.settings.min_deposit_cents))) {
+      this.data.settings.min_deposit_cents = 10000;
+    }
   }
 
   ensureDir() {
@@ -81,6 +90,14 @@ export class Store {
   getUserByEmail(email) {
     const e = String(email || '').toLowerCase();
     return this.data.users.find((u) => u.email.toLowerCase() === e) || null;
+  }
+
+  deleteUser(userId) {
+    const idx = this.data.users.findIndex((u) => u.id === userId);
+    if (idx < 0) return null;
+    const [removed] = this.data.users.splice(idx, 1);
+    this.save();
+    return removed;
   }
 
   upsertUser(user) {

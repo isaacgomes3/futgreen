@@ -37,6 +37,14 @@
       </section>
 
       <section class="fg-section fg-tab-panel" data-panel="depositos" hidden>
+        <form id="dep-min-form" class="fg-form fg-match" style="margin-bottom:1.25rem;max-width:420px">
+          <h3 style="margin:0;font-family:var(--font-display)">Depósito mínimo</h3>
+          <p class="fg-meta" style="margin:0">Valor mínimo para gerar PIX / comprovante no cliente.</p>
+          <label>Mínimo (R$)
+            <input name="min_deposit_reais" type="number" min="1" step="1" required />
+          </label>
+          <button class="fg-btn" type="submit">Salvar mínimo</button>
+        </form>
         <h3 class="fg-mon-title">Pendentes</h3>
         <div id="dep-pending" class="fg-mon-stack"></div>
         <h3 class="fg-mon-title" style="margin-top:1.25rem">Histórico</h3>
@@ -119,10 +127,6 @@
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
     import { api, toast, brl, fmtWhen } from '/public/js/api.js';
-
-    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
-      localStorage.setItem('fg_email', 'admin@futgreen.local');
-    }
     await mountShell({ admin: true });
 
     const params = new URLSearchParams(location.search);
@@ -205,22 +209,53 @@
         </tbody></table>`;
     }
 
+    async function loadDepositSettings() {
+      try {
+        const s = await api('/api/futgreen/settings/deposit', { admin: true });
+        const form = document.getElementById('dep-min-form');
+        if (form) form.min_deposit_reais.value = s.min_deposit_reais ?? 100;
+      } catch { /* ignore */ }
+    }
+
+    document.getElementById('dep-min-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const min = Number(new FormData(e.target).get('min_deposit_reais'));
+      try {
+        await api('/api/futgreen/settings/deposit', {
+          method: 'POST',
+          admin: true,
+          body: { min_deposit_reais: min },
+        });
+        toast(`Depósito mínimo atualizado: R$ ${min.toFixed(2)}`);
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
     async function loadDeposits() {
+      await loadDepositSettings();
       const { deposits } = await api('/api/futgreen/manual-deposits', { admin: true });
-      const pending = deposits.filter((d) => d.status === 'pending');
+      const pending = deposits.filter((d) => d.status === 'pending' || d.status === 'gateway_paid');
       const hist = [...deposits].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       document.getElementById('dep-pending').innerHTML = !pending.length
         ? '<p class="fg-empty">Nenhum depósito pendente.</p>'
         : pending
             .map((d) => {
               const u = usersById[d.user_id];
+              const paidGate = d.status === 'gateway_paid';
               return `
               <article class="mdz-card" data-id="${d.id}">
                 <div class="mdz-card-top"><span>${u?.email || d.user_id}</span><span>${fmtWhen(d.created_at)}</span></div>
                 <div class="mdz-card-game">${brl(d.amount_cents)}</div>
-                <div class="fg-meta">Destino: ${d.dest || 'apostador'}${d.note ? ` · ${d.note}` : ''}${d.proof_ref ? ` · ref ${d.proof_ref}` : ''}</div>
+                <div class="fg-meta">
+                  Destino: ${d.dest || 'apostador'}
+                  · ${d.channel === 'luc_paguei' ? 'PIX Luc' : 'Manual'}
+                  ${paidGate ? ' · <strong style="color:var(--fg-lime)">Pago no gateway</strong>' : ' · aguardando'}
+                  ${d.external_id ? ` · ${d.external_id}` : ''}
+                  ${d.note ? ` · ${d.note}` : ''}
+                </div>
                 <div class="mdz-card-foot">
-                  <button class="fg-btn" data-act="credit">Aprovar</button>
+                  <button class="fg-btn" data-act="credit">${paidGate ? 'Creditar' : 'Aprovar'}</button>
                   <button class="fg-btn ghost" data-act="mark">Já creditado</button>
                   <button class="fg-btn danger" data-act="reject">Rejeitar</button>
                 </div>

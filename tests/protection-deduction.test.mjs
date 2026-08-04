@@ -12,13 +12,13 @@ import {
   protectionHealthPayload,
 } from '../scripts/lib/protection-flow-contract.mjs';
 
-test('modelo e health stake_lock_v1 / v13 sem trava', () => {
+test('modelo e health stake_lock_v1 / v14 sem trava', () => {
   assert.equal(CREATE_PROTECTION_MODEL, 'stake_lock_v1');
   assert.equal(LOCKS_STAKE_ON_CREATE, false);
   const h = protectionHealthPayload();
-  assert.equal(h.protectionRuntime, 'protection-runtime-stake-lock-v13');
+  assert.equal(h.protectionRuntime, 'protection-runtime-stake-lock-v14');
   assert.equal(h.createProtectionModel, 'stake_lock_v1');
-  assert.equal(h.contractVersion, 'protection-flow-contract-v13');
+  assert.equal(h.contractVersion, 'protection-flow-contract-v14');
   assert.equal(h.exchangeCommission, 0.025);
   assert.equal(h.clientProfitShare, 0.01);
   assert.equal(h.ganhoWalletDeduction, false);

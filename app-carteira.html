@@ -17,6 +17,34 @@
       <section class="fg-section">
         <h2>Movimentar</h2>
         <div class="fg-grid">
+          <form id="deposit" class="fg-form fg-match">
+            <h3 style="margin:0;font-family:var(--font-display)">Depósito PIX</h3>
+            <p class="fg-meta" style="margin:0" id="pix-hint">Gera QR Code automático. Após o pagamento, o admin confirma o crédito (padrão).</p>
+            <label>Destino
+              <select name="dest">
+                <option value="apostador">Saldo Apostador</option>
+                <option value="desafio">Carteira Jornada</option>
+                <option value="provedor">Saldo Provedor</option>
+              </select>
+            </label>
+            <label>Valor (R$) <input name="amount" id="dep-amount" type="number" min="100" step="1" value="100" required /></label>
+            <label>CPF do pagador <input name="cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" required maxlength="14" /></label>
+            <button class="fg-btn" type="submit">Gerar PIX</button>
+          </form>
+
+          <div id="pix-box" class="fg-form fg-match" hidden>
+            <h3 style="margin:0;font-family:var(--font-display)">Pague com PIX</h3>
+            <p class="fg-meta" style="margin:0" id="pix-status">Aguardando pagamento…</p>
+            <div id="pix-qr" style="display:grid;place-items:center;padding:0.75rem 0"></div>
+            <label>Copia e cola
+              <textarea id="pix-emv" rows="3" readonly style="width:100%;font-size:0.75rem;resize:vertical"></textarea>
+            </label>
+            <div class="fg-cta-row" style="display:flex;gap:0.5rem;flex-wrap:wrap">
+              <button type="button" class="fg-btn" id="pix-copy">Copiar código</button>
+              <button type="button" class="fg-btn ghost" id="pix-close">Fechar</button>
+            </div>
+          </div>
+
           <form id="transfer" class="fg-form fg-match">
             <h3 style="margin:0;font-family:var(--font-display)">Reembolso → Jornada</h3>
             <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
@@ -28,18 +56,6 @@
             <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
             <label>Chave PIX <input name="pix_key" type="text" placeholder="email ou CPF" /></label>
             <button class="fg-btn ghost" type="submit">Solicitar saque</button>
-          </form>
-          <form id="deposit" class="fg-form fg-match">
-            <h3 style="margin:0;font-family:var(--font-display)">Comprovar depósito</h3>
-            <label>Destino
-              <select name="dest">
-                <option value="apostador">Saldo Apostador</option>
-                <option value="desafio">Carteira Jornada</option>
-                <option value="provedor">Saldo Provedor</option>
-              </select>
-            </label>
-            <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
-            <button class="fg-btn ghost" type="submit">Enviar comprovante</button>
           </form>
         </div>
       </section>
@@ -53,10 +69,123 @@
     import { mountShell } from '/public/js/v2-shell.js';
     import { api, toast } from '/public/js/api.js';
     import { renderWalletCards, renderExtrato } from '/public/js/v2-financeiro.js';
+    import QRCode from 'https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm';
 
-    await mountShell();
+    const me = await mountShell();
+    const depositOnly = Boolean(me?.deposit_only || me?.user?.deposit_only);
+    if (depositOnly) {
+      document.getElementById('transfer')?.closest('.fg-form')?.setAttribute('hidden', '');
+      document.getElementById('withdraw')?.closest('.fg-form')?.setAttribute('hidden', '');
+      const dest = document.querySelector('#deposit select[name="dest"]');
+      if (dest) {
+        dest.innerHTML = '<option value="apostador">Saldo Apostador</option>';
+      }
+      const hint = document.getElementById('pix-hint');
+      if (hint) {
+        hint.textContent =
+          'Gere o PIX do primeiro depósito. Quando o pagamento for reconhecido e creditado, sua conta é liberada automaticamente.';
+      }
+    }
     await renderWalletCards(document.getElementById('cards'));
     await renderExtrato(document.getElementById('extrato'));
+
+    let pollTimer = null;
+    let currentDepositId = null;
+
+    try {
+      const cfg = await api('/api/futgreen/deposits/pix-config');
+      const hint = document.getElementById('pix-hint');
+      const amountInput = document.getElementById('dep-amount');
+      const minReais = Number(cfg.min_deposit_reais) > 0 ? Number(cfg.min_deposit_reais) : 100;
+      if (amountInput) {
+        amountInput.min = String(minReais);
+        amountInput.value = String(minReais);
+      }
+      const minLabel = minReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      if (!cfg.luc_ready) {
+        hint.textContent = `PIX automático offline. Mínimo ${minLabel}.`;
+      } else if (cfg.auto_confirm) {
+        hint.textContent = `PIX automático (mín. ${minLabel}): crédito após confirmação do pagamento.`;
+      } else {
+        hint.textContent = `Gera QR automático (mín. ${minLabel}). Após o pagamento, o admin confirma o crédito.`;
+      }
+    } catch { /* ignore */ }
+
+    function stopPoll() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    function statusLabel(st) {
+      if (st === 'pending') return 'Aguardando pagamento…';
+      if (st === 'gateway_paid') return 'Pago no PIX — aguardando crédito do admin';
+      if (st === 'credited') return 'Creditado na carteira';
+      if (st === 'expired') return 'PIX expirado';
+      if (st === 'rejected') return 'Recusado';
+      return st;
+    }
+
+    async function showPix(result) {
+      const box = document.getElementById('pix-box');
+      const emv = result.pixCopyPaste || result.deposit?.pix_copy_paste;
+      currentDepositId = result.id || result.deposit?.id;
+      document.getElementById('pix-emv').value = emv || '';
+      document.getElementById('pix-status').textContent = statusLabel(result.status || result.deposit?.status);
+      const qrHost = document.getElementById('pix-qr');
+      qrHost.innerHTML = '';
+      if (emv) {
+        try {
+          const url = await QRCode.toDataURL(emv, { width: 220, margin: 1, color: { dark: '#0a0e0c', light: '#ffffff' } });
+          qrHost.innerHTML = `<img src="${url}" alt="QR Code PIX" width="220" height="220" style="border-radius:12px;background:#fff;padding:8px" />`;
+        } catch {
+          qrHost.innerHTML = '<p class="fg-meta">Use o copia e cola abaixo.</p>';
+        }
+      }
+      box.hidden = false;
+      stopPoll();
+      const st = result.status || result.deposit?.status;
+      if (currentDepositId && (st === 'pending' || st === 'gateway_paid')) {
+        pollTimer = setInterval(pollStatus, 4000);
+      }
+    }
+
+    async function pollStatus() {
+      if (!currentDepositId) return;
+      try {
+        const { deposit } = await api(`/api/futgreen/deposits/pix?id=${encodeURIComponent(currentDepositId)}`);
+        document.getElementById('pix-status').textContent = statusLabel(deposit.status);
+        if (deposit.status === 'credited') {
+          stopPoll();
+          toast(depositOnly ? 'Conta liberada — depósito creditado' : 'Depósito creditado');
+          if (depositOnly) {
+            location.href = '/app.html';
+            return;
+          }
+          await renderWalletCards(document.getElementById('cards'));
+          await renderExtrato(document.getElementById('extrato'));
+        } else if (deposit.status === 'gateway_paid') {
+          document.getElementById('pix-status').textContent =
+            'PIX reconhecido — aguardando crédito para liberar a conta';
+        } else if (deposit.status === 'expired' || deposit.status === 'rejected') {
+          stopPoll();
+        }
+      } catch { /* poll silencioso */ }
+    }
+
+    document.getElementById('pix-copy').onclick = async () => {
+      const emv = document.getElementById('pix-emv').value;
+      try {
+        await navigator.clipboard.writeText(emv);
+        toast('Código PIX copiado');
+      } catch {
+        document.getElementById('pix-emv').select();
+        toast('Selecione e copie o código');
+      }
+    };
+    document.getElementById('pix-close').onclick = () => {
+      stopPoll();
+      document.getElementById('pix-box').hidden = true;
+    };
 
     document.getElementById('transfer').onsubmit = async (e) => {
       e.preventDefault();
@@ -88,13 +217,19 @@
     document.getElementById('deposit').onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      const cpf = String(fd.get('cpf') || '').replace(/\D/g, '');
+      if (cpf.length !== 11) return toast('Informe um CPF válido');
       try {
-        await api('/api/futgreen/deposit-proof', {
+        const result = await api('/api/futgreen/deposits/pix', {
           method: 'POST',
-          body: { amount: Number(fd.get('amount')), dest: fd.get('dest') },
+          body: {
+            amount: Number(fd.get('amount')),
+            dest: fd.get('dest'),
+            cpf,
+          },
         });
-        toast('Comprovante enviado — aguarde crédito no admin');
-        e.target.reset();
+        toast('PIX gerado');
+        await showPix(result);
       } catch (err) {
         toast(err.message);
       }

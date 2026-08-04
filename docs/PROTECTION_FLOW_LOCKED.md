@@ -1,7 +1,7 @@
 # Protection Flow Locked — stake_lock_v1
 
-**Contrato:** `protection-flow-contract-v13`  
-**Runtime:** `protection-runtime-stake-lock-v13`  
+**Contrato:** `protection-flow-contract-v14`  
+**Runtime:** `protection-runtime-stake-lock-v14`  
 **Código:** `scripts/lib/protection-flow-contract.mjs`
 
 ## Regras travadas
@@ -10,10 +10,11 @@
 2. O valor informado é a stake (BACK) ou responsabilidade (LAY) usada na BetBra.
 3. Teto **50%** do Saldo Apostador = cobertura máxima de reembolso.
 4. **1** proteção ativa por `user` + `match` (indicação).
-5. Somente **pré-kickoff**.
+5. Somente **pré-kickoff** para criar.
 6. LAY = responsabilidade · BACK = stake.
 7. Side da indicação admin é **travado** (cliente não edita).
 8. Liquidação: **Reembolso** · **Ganho** · **Anula** · **Cancelar**.
+9. Cliente pode **cancelar** a própria proteção ativa **só antes do kickoff** (sem P&L).
 
 ## Economia da indicação (v13)
 

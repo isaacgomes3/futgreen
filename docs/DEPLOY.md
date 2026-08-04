@@ -40,7 +40,7 @@ ssh tips3x3 'certbot --nginx -d futgreen.com.br -d www.futgreen.com.br --non-int
 
 ```bash
 curl -sf https://futgreen.com.br/health
-# expect: stake_lock_v1 + protection-runtime-stake-lock-v13
+# expect: stake_lock_v1 + protection-runtime-stake-lock-v14
 ```
 
 Produção **não** usa `FG_LOCAL=1` (sem workshop/reseed).

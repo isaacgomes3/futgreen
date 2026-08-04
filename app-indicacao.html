@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
+  <title>Indicação · FUTGREEN</title>
+  <link rel="stylesheet" href="/public/css/futgreen.css" />
+</head>
+<body>
+  <div class="fg-shell" id="fg-shell-root">
+    <main class="fg-main">
+      <section class="fg-section">
+        <h2>Seu link de indicação</h2>
+        <p class="fg-meta" style="margin:0 0 1rem">Compartilhe com amigos. Quem se cadastrar por este link fica vinculado à sua conta.</p>
+        <div class="fg-form fg-match" style="max-width:36rem">
+          <label>Código
+            <input id="ref-code" type="text" readonly />
+          </label>
+          <label>Link
+            <input id="ref-url" type="text" readonly />
+          </label>
+          <div class="fg-cta-row" style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <button type="button" class="fg-btn" id="ref-copy">Copiar link</button>
+            <button type="button" class="fg-btn ghost" id="ref-share">Compartilhar</button>
+          </div>
+          <p class="fg-meta" id="ref-count" style="margin:0.75rem 0 0"></p>
+        </div>
+      </section>
+      <section class="fg-section">
+        <h2>Indicados</h2>
+        <div id="ref-list"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { mountShell } from '/public/js/v2-shell.js';
+    import { api, toast } from '/public/js/api.js';
+
+    await mountShell();
+
+    const data = await api('/api/futgreen/referral');
+    const codeEl = document.getElementById('ref-code');
+    const urlEl = document.getElementById('ref-url');
+    codeEl.value = data.code || '';
+    urlEl.value = data.url || '';
+    document.getElementById('ref-count').textContent =
+      data.count === 1 ? '1 pessoa indicada' : `${data.count || 0} pessoas indicadas`;
+
+    const list = document.getElementById('ref-list');
+    if (!data.users?.length) {
+      list.innerHTML = '<p class="fg-empty">Ninguém se cadastrou com o seu link ainda.</p>';
+    } else {
+      list.innerHTML = data.users
+        .map(
+          (u) => `
+        <article class="mdz-card">
+          <div class="mdz-card-top">
+            <span>${u.name || u.email}</span>
+            <span class="fg-status ${u.is_active ? 'active' : 'pending'}">${u.is_active ? 'Ativa' : 'Pendente'}</span>
+          </div>
+          <div class="fg-meta">${u.email}${u.created_at ? ` · ${new Date(u.created_at).toLocaleDateString('pt-BR')}` : ''}</div>
+        </article>`,
+        )
+        .join('');
+    }
+
+    async function copyLink() {
+      const text = urlEl.value;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('Link copiado');
+      } catch {
+        urlEl.select();
+        document.execCommand('copy');
+        toast('Link copiado');
+      }
+    }
+
+    document.getElementById('ref-copy').onclick = copyLink;
+    document.getElementById('ref-share').onclick = async () => {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'FUTGREEN',
+            text: 'Crie sua conta na FUTGREEN com o meu link:',
+            url: urlEl.value,
+          });
+          return;
+        } catch { /* cancelado */ }
+      }
+      await copyLink();
+    };
+  </script>
+</body>
+</html>

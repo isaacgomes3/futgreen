@@ -19,10 +19,6 @@
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
     import { renderExtrato } from '/public/js/v2-financeiro.js';
-
-    if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
-      localStorage.setItem('fg_email', 'admin@futgreen.local');
-    }
     await mountShell({ admin: true });
     await renderExtrato(document.getElementById('extrato'), { limit: 500 });
   </script>

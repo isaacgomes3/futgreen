@@ -1,7 +1,7 @@
 /**
- * protection-flow-contract-v13
+ * protection-flow-contract-v14
  * Modelo: stake_lock_v1 (indicação Proteger — sem trava de carteira)
- * Runtime: protection-runtime-stake-lock-v13
+ * Runtime: protection-runtime-stake-lock-v14
  *
  * Entrada: NÃO move Saldo Apostador / NÃO credita Travado.
  * O valor informado é a stake/responsabilidade usada na BetBra.
@@ -15,12 +15,13 @@
  *
  * REEMBOLSO (indicação falhou): credita stake integral no Saldo Reembolso
  * ANULA / GANHO: sem movimento de carteira
+ * Cliente pode CANCELAR a própria proteção ativa só antes do kickoff (sem P&L).
  *
  * Alterar regras exige pedido explícito do dono + bump de versão.
  */
 
-export const PROTECTION_CONTRACT_VERSION = 'protection-flow-contract-v13';
-export const PROTECTION_RUNTIME = 'protection-runtime-stake-lock-v13';
+export const PROTECTION_CONTRACT_VERSION = 'protection-flow-contract-v14';
+export const PROTECTION_RUNTIME = 'protection-runtime-stake-lock-v14';
 export const CREATE_PROTECTION_MODEL = 'stake_lock_v1';
 /** Comissão BetBra / exchange sobre o lucro bruto */
 export const EXCHANGE_COMMISSION = 0.025;

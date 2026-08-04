@@ -5,7 +5,8 @@
 ## Superfícies que não podem regredir sem bump
 
 - Modelo de criação: `createProtectionModel=stake_lock_v1`
-- Health: `protectionRuntime=protection-runtime-stake-lock-v13`
+- Health: `protectionRuntime=protection-runtime-stake-lock-v14`
+- Cliente cancela proteção própria só pré-kickoff
 - Buckets e labels (`Saldo Reembolso`, nunca “Saldo Dedução”)
 - Transferência Banca → Jornada (`desafio_balance_cents`) bloqueada (403)
 - Labels: Carteira Jornada (não “Desafio” na UI); Travado não é superfície de UI
@@ -15,7 +16,7 @@
 
 ## Checklist pós-deploy
 
-1. `GET /health` com runtime v13 + stake_lock_v1  
+1. `GET /health` com runtime v14 + stake_lock_v1  
 2. `npm test`  
 3. `npm run audit:prod`  
 4. Smoke: publicar jogo → proteger → liquidar; publicar desafio → registrar → settle

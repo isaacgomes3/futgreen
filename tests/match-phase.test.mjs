@@ -54,6 +54,35 @@ test('encerrado após settle', () => {
   assert.equal(p.home_score, 2);
 });
 
+test('tempo esgotado encerra no site sem settle', () => {
+  const p = deriveMatchPhase(
+    {
+      starts_at: new Date(kick).toISOString(),
+      home_score: 3,
+      away_score: 0,
+    },
+    kick + 130 * 60e3,
+  );
+  assert.equal(p.phase, 'finished');
+  assert.equal(p.finished, true);
+  assert.equal(p.live, false);
+  assert.equal(p.clock, 'FT');
+  assert.equal(p.home_score, 3);
+});
+
+test('touchMatchLiveState persiste finished_at por tempo', () => {
+  const m = {
+    starts_at: new Date(kick).toISOString(),
+    home_score: 1,
+    away_score: 0,
+  };
+  const { changed, phase } = touchMatchLiveState(m, kick + 130 * 60e3);
+  assert.equal(changed, true);
+  assert.ok(m.finished_at);
+  assert.equal(m.live, false);
+  assert.equal(phase.finished, true);
+});
+
 test('touchMatchLiveState inicializa placar', () => {
   const m = { starts_at: new Date(kick).toISOString(), home_score: null, away_score: null };
   const { changed, phase } = touchMatchLiveState(m, kick + 5 * 60e3);

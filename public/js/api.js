@@ -2,11 +2,29 @@
 const FG_API = '';
 
 export function getEmail() {
-  return localStorage.getItem('fg_email') || 'cliente@futgreen.local';
+  return localStorage.getItem('fg_email') || '';
 }
 
 export function setEmail(email) {
   localStorage.setItem('fg_email', email);
+}
+
+export function isLoggedIn() {
+  try {
+    return Boolean(localStorage.getItem('fg_email') && localStorage.getItem('fg_authed') === '1');
+  } catch {
+    return false;
+  }
+}
+
+/** Encerra sessão local e volta ao login */
+export function logout({ redirect = '/entrar.html' } = {}) {
+  try {
+    localStorage.removeItem('fg_email');
+    localStorage.removeItem('fg_authed');
+    localStorage.removeItem('fg_impersonate');
+  } catch { /* ignore */ }
+  if (redirect) location.href = redirect;
 }
 
 export function getImpersonate() {
@@ -19,12 +37,13 @@ export function setImpersonate(email) {
 }
 
 export async function api(path, { method = 'GET', body, admin = false } = {}) {
+  const email = getEmail();
   const headers = {
     'Content-Type': 'application/json',
-    'X-User-Email': getEmail(),
   };
-  if (admin || getEmail().includes('admin') || getEmail().includes('isaac') || getEmail().includes('carlos')) {
-    headers['X-Admin-Email'] = getEmail();
+  if (email) headers['X-User-Email'] = email;
+  if (admin || /admin|isaac|carlos|futgreen@gmail/i.test(email)) {
+    headers['X-Admin-Email'] = email;
   }
   const imp = getImpersonate();
   if (imp) headers['X-Impersonate'] = imp;

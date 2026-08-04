@@ -45,14 +45,22 @@
       e.preventDefault();
       const fd = new FormData(e.target);
       try {
-        const { user } = await api('/api/futgreen/auth/login', {
+        const data = await api('/api/futgreen/auth/login', {
           method: 'POST',
           body: { email: fd.get('email'), password: fd.get('password') },
         });
+        const user = data.user;
         setEmail(user.email);
         localStorage.setItem('fg_authed', '1');
         toast('Bem-vindo, ' + (user.name || user.email));
-        location.href = '/app.html';
+        const next = new URLSearchParams(location.search).get('next') || '';
+        const safeNext =
+          next.startsWith('/') && !next.startsWith('//') && !next.includes('://') ? next : '';
+        if (data.deposit_only || user.deposit_only || user.is_active === false) {
+          location.href = safeNext.startsWith('/app-carteira') ? safeNext : '/app-carteira.html';
+          return;
+        }
+        location.href = safeNext || '/app.html';
       } catch (err) {
         toast(err.message || 'Falha ao entrar');
       }

@@ -12,24 +12,35 @@
     <main class="fg-main">
       <section class="fg-section">
         <h2>Minhas Proteções</h2>
+        <p class="lead">Você pode cancelar uma proteção ativa somente antes do início da partida.</p>
         <div id="list"></div>
       </section>
     </main>
   </div>
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
-    import { api, brl, fmtWhen } from '/public/js/api.js';
+    import { api, brl, fmtWhen, toast } from '/public/js/api.js';
     import { teamPairCell } from '/public/js/teams-ui.js';
 
-    await mountShell();
+    const me = await mountShell();
     const { protections } = await api('/api/futgreen/protections');
     const { matches } = await api('/api/futgreen/matches?all=1');
     const byId = Object.fromEntries(matches.map((m) => [m.id, m]));
     const el = document.getElementById('list');
 
-    if (!protections.length) {
-      el.innerHTML = '<p class="fg-empty">Nenhuma proteção ainda. <a href="/app-proteger.html">Proteger aposta</a></p>';
-    } else {
+    function canClientCancel(p, m) {
+      if (me.impersonating) return false;
+      if (p.status !== 'active') return false;
+      if (!m?.starts_at) return false;
+      const t = new Date(m.starts_at).getTime();
+      return Number.isFinite(t) && Date.now() < t;
+    }
+
+    async function render() {
+      if (!protections.length) {
+        el.innerHTML = '<p class="fg-empty">Nenhuma proteção ainda. <a href="/app-proteger.html">Proteger aposta</a></p>';
+        return;
+      }
       el.innerHTML = `
         <div class="fg-grid">
           ${protections
@@ -38,17 +49,48 @@
               const game = m
                 ? teamPairCell(m.home_team, m.away_team, m.home_logo, m.away_logo)
                 : `<span>${p.match_id}</span>`;
+              const cancelable = canClientCancel(p, m);
               return `
-              <article class="fg-match">
+              <article class="fg-match" data-id="${p.id}">
                 ${game}
-                <div class="fg-meta" style="margin-top:0.65rem">${m?.league || ''} · ${fmtWhen(p.created_at)}</div>
+                <div class="fg-meta" style="margin-top:0.65rem">${m?.league || ''} · ${fmtWhen(m?.starts_at || p.created_at)}</div>
                 <div class="fg-meta">${p.side} @ ${p.odd} · ${brl(p.amount_cents)}</div>
                 <span class="fg-status ${p.result || p.status}">${p.result || p.status}</span>
+                ${
+                  cancelable
+                    ? `<div style="margin-top:0.75rem">
+                        <button type="button" class="fg-btn ghost" data-act="cancel" data-id="${p.id}">Cancelar proteção</button>
+                        <p class="fg-meta" style="margin:0.35rem 0 0">Disponível só antes do kickoff.</p>
+                      </div>`
+                    : p.status === 'active'
+                      ? `<p class="fg-meta" style="margin:0.55rem 0 0">Partida iniciada — cancelamento encerrado.</p>`
+                      : ''
+                }
               </article>`;
             })
             .join('')}
         </div>`;
+
+      el.querySelectorAll('[data-act="cancel"]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Cancelar esta proteção? Só é possível antes do início da partida.')) return;
+          btn.disabled = true;
+          try {
+            await api('/api/futgreen/protections/cancel', {
+              method: 'POST',
+              body: { protection_id: btn.dataset.id },
+            });
+            toast('Proteção cancelada');
+            location.reload();
+          } catch (err) {
+            toast(err.message);
+            btn.disabled = false;
+          }
+        };
+      });
     }
+
+    await render();
   </script>
 </body>
 </html>

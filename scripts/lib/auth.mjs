@@ -32,6 +32,31 @@ export function isUserActive(user) {
   return user.is_active !== false;
 }
 
+/** Bloqueio administrativo (impede login e uso da API) */
+export function isUserBlocked(user) {
+  if (!user) return false;
+  return user.is_blocked === true || user.blocked === true;
+}
+
+/**
+ * Cliente cadastrado mas ainda sem 1º depósito creditado.
+ * Pode entrar só na Carteira/Depósito até o PIX ser reconhecido e creditado.
+ */
+export function isDepositOnly(user) {
+  if (!user || isUserBlocked(user)) return false;
+  return user.is_active === false;
+}
+
+/** Libera conta após crédito do depósito (idempotente). */
+export function activateUserAfterDeposit(user, { source = 'first_deposit' } = {}) {
+  if (!user || isUserActive(user)) return false;
+  user.is_active = true;
+  user.activated_at = new Date().toISOString();
+  user.activated_by = source;
+  user.activation_source = source;
+  return true;
+}
+
 export function assertAuthPayload({ email, password, name }, { requireName = false } = {}) {
   const e = normalizeEmail(email);
   if (!e || !e.includes('@') || e.length < 5) {

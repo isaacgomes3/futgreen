@@ -20,6 +20,8 @@ const required = [
   'app-desafio.html',
   'app-desafio-jornada.html',
   'app-carteira.html',
+  'app-indicacao.html',
+  'app-perfil.html',
   'admin-jogos.html',
   'admin-desafios.html',
   'admin-monitoring-desafios.html',

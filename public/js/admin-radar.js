@@ -178,8 +178,14 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
       const data = await api(`/api/futgreen/prelive-event/${encodeURIComponent(id)}?logos=1`, { admin: true });
       const ev = { ...listEv, ...(data.event || {}) };
       const markets = data.markets || ev.markets || [];
-      /** @type {Map<string, {key:string, market_id:string, market_name:string, runner_name:string, runner_id:string|null, side:string, odd:number}>} */
+      /** @type {Map<string, {key:string, market_id:string, market_name:string, runner_name:string, runner_id:string|null, side:string, odd:number, liquidity:number}>} */
       const cart = new Map();
+      const marketVolById = Object.fromEntries(
+        markets.map((m, i) => [
+          m.id != null ? String(m.id) : `idx-${i}`,
+          Number(m.volume || 0) || 0,
+        ]),
+      );
 
       const canPickOdds = dest === 'proteger';
       status.textContent = canPickOdds
@@ -245,13 +251,18 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
         );
 
         function cartSelections() {
-          return [...cart.values()].map((x) => ({
-            market_id: x.market_id,
-            runner_name: x.runner_name,
-            runner_id: x.runner_id,
-            side: x.side,
-            odd: x.odd,
-          }));
+          return [...cart.values()].map((x) => {
+            const sel = {
+              market_id: x.market_id,
+              runner_name: x.runner_name,
+              runner_id: x.runner_id,
+              side: x.side,
+              odd: x.odd,
+            };
+            const liq = Number(x.liquidity);
+            if (Number.isFinite(liq) && liq >= 0) sel.liquidity = liq;
+            return sel;
+          });
         }
 
         function syncCartUi() {
@@ -267,17 +278,30 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
           btnDraft.textContent = n <= 1 ? 'Lançar rascunho' : `Lançar ${n} rascunhos`;
           btnPub.textContent = n <= 1 ? 'Lançar e publicar' : `Publicar ${n} odds`;
           cartItems.innerHTML = items
-            .map(
-              (x) => `
+            .map((x) => {
+              const liq =
+                x.liquidity != null &&
+                Number.isFinite(Number(x.liquidity)) &&
+                Number(x.liquidity) >= 0
+                  ? String(Number(x.liquidity))
+                  : '';
+              return `
               <div class="fg-cart-item" data-key="${x.key}">
                 <span class="fg-cart-item-main">
                   <span class="fg-cart-side ${x.side === 'LAY' ? 'is-lay' : 'is-back'}">${x.side}</span>
                   <strong>${x.odd.toFixed(2)}</strong>
                   <span class="fg-meta" style="margin:0">${x.runner_name} · ${x.market_name}</span>
                 </span>
+                <label class="fg-cart-liq" title="Liquidez individual deste mercado">
+                  <span>Liquidez R$</span>
+                  <input type="number" min="0" step="1" inputmode="decimal"
+                    data-act="liq" data-key="${x.key}"
+                    value="${liq}"
+                    placeholder="—" />
+                </label>
                 <button type="button" class="fg-cart-remove" data-act="remove" data-key="${x.key}" title="Retirar">×</button>
-              </div>`,
-            )
+              </div>`;
+            })
             .join('');
           cartItems.querySelectorAll('[data-act="remove"]').forEach((btn) => {
             btn.onclick = () => {
@@ -285,8 +309,23 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
               syncCartUi();
             };
           });
+          cartItems.querySelectorAll('[data-act="liq"]').forEach((inp) => {
+            const apply = () => {
+              const item = cart.get(inp.dataset.key);
+              if (!item) return;
+              const raw = String(inp.value || '').trim();
+              if (!raw) {
+                item.liquidity = null;
+                return;
+              }
+              const v = Number(raw);
+              item.liquidity = Number.isFinite(v) && v >= 0 ? v : null;
+            };
+            inp.oninput = apply;
+            inp.onchange = apply;
+          });
           status.textContent = n
-            ? `Carrinho: ${n} odd${n > 1 ? 's' : ''} · ${ev.home_team} × ${ev.away_team}`
+            ? `Carrinho: ${n} odd${n > 1 ? 's' : ''} · liquidez individual · ${ev.home_team} × ${ev.away_team}`
             : `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd (back/lay)`;
         }
 
@@ -308,6 +347,7 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
               runner_id: btn.dataset.runnerId || null,
               side: btn.dataset.side,
               odd: Number(btn.dataset.odd),
+              liquidity: null,
             });
           }
           syncCartUi();
@@ -371,24 +411,23 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
           const o = ev.odds || {};
           const hint = ev.desafio_hint || {};
           return `
-          <article class="mdz-card fg-radar-event" data-idx="${i}" style="padding:0.85rem 0.2rem;cursor:pointer" title="Ver todos os mercados">
-            <div class="mdz-card-top">
+          <article class="mdz-card fg-radar-event" data-idx="${i}" title="Ver todos os mercados">
+            <div class="fg-radar-line fg-radar-line-head">
               <span>${ev.league || 'Futebol'}${ev.in_running ? ' · LIVE' : ''}</span>
               <span>${fmtWhen(ev.starts_at)}</span>
             </div>
-            <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0.5rem;align-items:center;margin:0.45rem 0">
+            <div class="fg-radar-line fg-radar-line-teams">
               ${teamCell(ev.home_team, ev.home_logo)}
               <span class="fg-vs">×</span>
               ${teamCell(ev.away_team, ev.away_logo)}
             </div>
-            <div class="fg-meta">
-              Vol ${brl((ev.volume || 0) * 100)} ·
-              H ${o.home_back ?? '—'} / ${o.home_lay ?? '—'} ·
-              A ${o.away_back ?? '—'} / ${o.away_lay ?? '—'}
-              ${dest === 'desafio' && hint.odd_futgreen ? ` · zebra ${hint.bet_team_side} @ ${hint.odd_futgreen}` : ''}
-              <span class="fg-radar-hint"> · ver mercados</span>
+            <div class="fg-radar-line fg-radar-line-meta">
+              <span>Vol ${brl((ev.volume || 0) * 100)}</span>
+              <span>H ${o.home_back ?? '—'} / ${o.home_lay ?? '—'}</span>
+              <span>A ${o.away_back ?? '—'} / ${o.away_lay ?? '—'}</span>
+              ${dest === 'desafio' && hint.odd_futgreen ? `<span>zebra ${hint.bet_team_side} @ ${hint.odd_futgreen}</span>` : ''}
             </div>
-            <div class="mdz-card-foot">
+            <div class="fg-radar-line fg-radar-line-actions mdz-card-foot">
               <button type="button" class="fg-btn ghost" data-act="markets">Ver mercados</button>
               <button type="button" class="fg-btn" data-act="draft">Importar rascunho</button>
               <button type="button" class="fg-btn secondary" data-act="publish">Importar e publicar</button>
