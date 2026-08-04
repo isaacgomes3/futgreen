@@ -143,10 +143,15 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
         body,
       });
       const n = res.count || res.matches?.length || 1;
-      if (dest === 'desafio') toast('Desafio importado da BetBra');
-      else if (selections?.length) toast(n > 1 ? `${n} odds lançadas` : 'Odd lançada');
-      else if (n > 1) toast(`${n} mercados lançados`);
-      else toast(marketIds?.length ? 'Mercado lançado' : 'Jogo importado da BetBra');
+      if (dest === 'desafio') {
+        toast(n > 1 ? `Desafio com ${n} etapas criado` : 'Desafio importado da BetBra');
+      } else if (selections?.length) {
+        toast(n > 1 ? `${n} odds lançadas` : 'Odd lançada');
+      } else if (n > 1) {
+        toast(`${n} mercados lançados`);
+      } else {
+        toast(marketIds?.length ? 'Mercado lançado' : 'Jogo importado da BetBra');
+      }
       onImported?.(res);
       return res;
     } catch (e) {
@@ -181,7 +186,7 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
       /** @type {Map<string, {key:string, market_id:string, market_name:string, runner_name:string, runner_id:string|null, side:string, odd:number}>} */
       const cart = new Map();
 
-      const canPickOdds = dest === 'proteger';
+      const canPickOdds = dest === 'proteger' || dest === 'desafio';
       status.textContent = canPickOdds
         ? `${markets.length} mercados · ${ev.home_team} × ${ev.away_team} · clique na odd (back/lay)`
         : `${markets.length} mercados · ${ev.home_team} × ${ev.away_team}`;
@@ -264,8 +269,13 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
           btnPub.disabled = n === 0;
           cartEl.hidden = n === 0;
           cartCount.textContent = n ? `${n} odd${n > 1 ? 's' : ''}` : '';
-          btnDraft.textContent = n <= 1 ? 'Lançar rascunho' : `Lançar ${n} rascunhos`;
-          btnPub.textContent = n <= 1 ? 'Lançar e publicar' : `Publicar ${n} odds`;
+          if (dest === 'desafio') {
+            btnDraft.textContent = n <= 1 ? 'Criar rascunho' : `Criar ${n} etapas`;
+            btnPub.textContent = n <= 1 ? 'Criar e publicar' : `Publicar ${n} etapas`;
+          } else {
+            btnDraft.textContent = n <= 1 ? 'Lançar rascunho' : `Lançar ${n} rascunhos`;
+            btnPub.textContent = n <= 1 ? 'Lançar e publicar' : `Publicar ${n} odds`;
+          }
           cartItems.innerHTML = items
             .map(
               (x) => `

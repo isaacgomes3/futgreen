@@ -13,23 +13,6 @@
       <section class="fg-section">
         <h2>Lançar / operar Desafio</h2>
         <div id="radar"></div>
-        <form id="create" class="fg-form fg-match" style="max-width:640px;margin-bottom:2rem">
-          <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Novo desafio</h3>
-          <label>Título <input name="title" value="Desafio da semana" required /></label>
-          <label>Casa <input name="home_team" id="home_team" autocomplete="off" required /></label>
-          <input type="hidden" name="home_logo" id="home_logo" />
-          <label>Visitante <input name="away_team" id="away_team" autocomplete="off" required /></label>
-          <input type="hidden" name="away_logo" id="away_logo" />
-          <label>Time zebra
-            <select name="bet_team_side"><option value="home">Casa</option><option value="away" selected>Visitante</option></select>
-          </label>
-          <label>Odd FUTGRN <input name="odd_futgreen" type="number" step="0.01" value="3.40" required /></label>
-          <label>Odd Casa <input name="odd_casa" type="number" step="0.01" value="1.55" required /></label>
-          <label>Liquidez (R$) <input name="liquidity" type="number" value="5000" /></label>
-          <label>Kickoff <input name="starts_at" type="datetime-local" required /></label>
-          <label><input name="publish" type="checkbox" checked /> Publicar ao salvar</label>
-          <button class="fg-btn" type="submit">Criar desafio</button>
-        </form>
         <div id="list"></div>
       </section>
     </main>
@@ -37,23 +20,12 @@
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
     import { api, toast, fmtWhen } from '/public/js/api.js';
-    import { mountBetbraRadar, bindTeamSearch } from '/public/js/admin-radar.js';
+    import { mountBetbraRadar } from '/public/js/admin-radar.js';
 
     if (!localStorage.getItem('fg_email')?.match(/admin|isaac|carlos/)) {
       localStorage.setItem('fg_email', 'admin@futgreen.local');
     }
     await mountShell({ admin: true });
-
-    bindTeamSearch(document.getElementById('home_team'), {
-      onPick: (t) => {
-        document.getElementById('home_logo').value = t.logo || '';
-      },
-    });
-    bindTeamSearch(document.getElementById('away_team'), {
-      onPick: (t) => {
-        document.getElementById('away_logo').value = t.logo || '';
-      },
-    });
 
     async function load() {
       const { desafios } = await api('/api/futgreen/desafios?admin=1', { admin: true });
@@ -150,46 +122,6 @@
         };
       });
     }
-
-    document.getElementById('create').onsubmit = async (e) => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      const starts = new Date(fd.get('starts_at')).toISOString();
-      try {
-        await api('/api/futgreen/desafios', {
-          method: 'POST',
-          admin: true,
-          body: {
-            title: fd.get('title'),
-            publish: fd.get('publish') === 'on',
-            steps: [
-              {
-                home_team: fd.get('home_team'),
-                away_team: fd.get('away_team'),
-                home_logo: fd.get('home_logo') || null,
-                away_logo: fd.get('away_logo') || null,
-                bet_team_side: fd.get('bet_team_side'),
-                odd_futgreen: Number(fd.get('odd_futgreen')),
-                odd_casa: Number(fd.get('odd_casa')),
-                liquidity: Number(fd.get('liquidity')),
-                starts_at: starts,
-                market_flag: 'dnb',
-                casa_name: 'Casa',
-              },
-            ],
-          },
-        });
-        toast('Desafio criado');
-        await load();
-      } catch (err) {
-        toast(err.message);
-      }
-    };
-
-    const dt = document.querySelector('[name=starts_at]');
-    const d = new Date(Date.now() + 2 * 3600e3);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    dt.value = d.toISOString().slice(0, 16);
 
     await mountBetbraRadar(document.getElementById('radar'), {
       dest: 'desafio',
