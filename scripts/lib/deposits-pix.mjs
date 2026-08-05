@@ -130,7 +130,7 @@ export async function createPixDeposit(
       externalId,
       callbackUrl,
       payer: {
-        name: payer?.name || user.name || 'Cliente FutGreen',
+        name: payer?.name || user.name || 'Cliente ArbiShield',
         email: payer?.email || user.email,
         document: payer?.document || user.cpf || user.document,
       },

@@ -28,7 +28,7 @@ export async function createDesafio(store, payload) {
   const publish = Boolean(payload.publish || payload.publish_on_save);
   const desafio = {
     id,
-    title: payload.title || 'Desafio FUTGRN',
+    title: payload.title || 'Desafio ARBISHIELD',
     is_published: publish,
     is_active: publish,
     published_at: publish ? now : null,

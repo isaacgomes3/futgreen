@@ -60,7 +60,7 @@ export function createProtection(store, { userId, matchId, side, odd, amountCent
     throw Object.assign(new Error('side deve ser LAY ou BACK'), { status: 400 });
   }
   if (match.side && side != null && String(side).trim() !== '' && String(side).toUpperCase() !== sideU) {
-    throw Object.assign(new Error('Lado fixado pela indicação FutGreen'), { status: 400, code: 'SIDE_LOCKED' });
+    throw Object.assign(new Error('Lado fixado pela indicação ArbiShield'), { status: 400, code: 'SIDE_LOCKED' });
   }
 
   const amount = Math.round(Number(amountCents));
