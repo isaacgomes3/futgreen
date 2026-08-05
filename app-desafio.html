@@ -212,7 +212,9 @@
       const key = `${desafio.id}|${step.id}`;
       const mine = step.my_participation;
       const canCancelEntry = mine && !closed && !kickoffPassed(step.starts_at);
-      const bg = step.home_logo || step.away_logo ? '/public/assets/hero-stadium.jpg' : '/public/assets/hero-stadium.jpg';
+      const rawBg = step.card_bg || step.home_art || step.away_art || '';
+      const bgIsBadge = /\/badge\//i.test(rawBg);
+      const bg = !rawBg || bgIsBadge ? '/public/assets/hero-stadium.jpg' : rawBg;
       return `
       <article class="fg-match fg-ind-card${closed ? ' is-finished' : ''}" data-key="${key}">
         <div class="fg-ind-media" aria-hidden="true">
@@ -235,15 +237,12 @@
           </div>
           ${matchClockHtml(step)}
           <div class="fg-ind-list">
-            <div class="fg-ind-list-head-row">
-              <div class="fg-ind-list-head">Indicação: ${shortTeamName(zebraTeam)} · mercado ${step.market_flag || 'dnb'}</div>
-            </div>
             <div class="fg-ind-mkt-row">
               <button type="button" class="fg-ind-mkt${!canEnter ? ' is-locked' : ''}" data-act="enter"
                 ${!canEnter ? `disabled title="${closed ? 'Partida iniciada — entrada encerrada' : 'Deposite na Carteira Desafio para entrar'}"` : ''}>
                 <span class="fg-ind-mkt-line">
                   <span class="fg-ind-mkt-main">
-                    <strong>ARBISHIELD</strong>
+                    <strong title="${zebraTeam}">${shortTeamName(zebraTeam)}</strong>
                     <span class="fg-meta" style="margin:0">Liq. ${brl((step.liquidity || 0) * 100)}</span>
                   </span>
                   <span class="fg-ind-mkt-odds">
@@ -256,12 +255,9 @@
             <div class="fg-ind-mkt-row">
               <div class="fg-ind-mkt" style="cursor:default">
                 <span class="fg-ind-mkt-line">
-                  <span class="fg-ind-mkt-main" style="flex-direction:row;align-items:center;gap:0.5rem">
-                    ${BETBRA_ICON}
-                    <span>
-                      <strong>BetBra</strong>
-                      <span class="fg-meta" style="margin:0;display:block">Referência</span>
-                    </span>
+                  <span class="fg-ind-mkt-main">
+                    <strong>BetBra</strong>
+                    <span class="fg-meta" style="margin:0">Referência</span>
                   </span>
                   <span class="fg-ind-mkt-odds">
                     <span class="fg-prot-side is-lay">BETBRA</span>
@@ -314,16 +310,43 @@
         return;
       }
       const prev = previewSinal(step, stakeReais);
+      const houseStakeReais = Number(prev.houseStake).toFixed(2);
       el.innerHTML = `
         <div class="fg-prot-preview-grid">
           <div><span>Você recebe</span><strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong></div>
-          <div><span>Equivalente na BetBra @ ${prev.oddCasa}</span><strong>${brl(Math.round(prev.houseStake * 100))}</strong></div>
+          <div>
+            <span>Equivalente na BetBra @ ${prev.oddCasa}</span>
+            <strong style="display:flex;align-items:center;gap:.4rem">
+              ${brl(Math.round(prev.houseStake * 100))}
+              <button type="button" class="fg-btn ghost" data-act="copy-house-stake" data-value="${houseStakeReais}"
+                style="padding:.15rem .5rem;font-size:.7rem;font-weight:600" title="Copiar valor para apostar na BetBra">Copiar</button>
+            </strong>
+          </div>
         </div>
         <p class="fg-meta" style="margin:0.45rem 0 0">
           Se a indicação vencer na BetBra: você já recebe fora, sem crédito adicional aqui.<br />
           Se a indicação não vencer (Casa ou Empate Anula): a Carteira Desafio credita
           <strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong> (stake + lucro), como proteção.
         </p>`;
+      const copyBtn = el.querySelector('[data-act="copy-house-stake"]');
+      if (copyBtn) {
+        copyBtn.onclick = async () => {
+          const value = copyBtn.dataset.value;
+          try {
+            await navigator.clipboard.writeText(value);
+          } catch {
+            const tmp = document.createElement('textarea');
+            tmp.value = value;
+            tmp.style.position = 'fixed';
+            tmp.style.opacity = '0';
+            document.body.appendChild(tmp);
+            tmp.select();
+            document.execCommand('copy');
+            tmp.remove();
+          }
+          toast(`Copiado: R$ ${value}`);
+        };
+      }
     }
 
     function openEntryModal(desafio, step) {

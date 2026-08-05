@@ -221,21 +221,36 @@ function requireAdmin(ctx) {
   }
 }
 
-/** Garante logos TheSportsDB em steps de desafio (persiste no store) */
+/** Garante logos + arte de fundo do card (mesma fonte da Proteção) em steps de desafio (persiste no store) */
 async function ensureStepsLogos(steps) {
   let changed = false;
   for (const s of steps || []) {
     if (!s) continue;
-    try {
-      if (!s.home_logo && s.home_team) {
-        s.home_logo = await resolveTeamLogo(s.home_team);
-        changed = true;
-      }
-      if (!s.away_logo && s.away_team) {
-        s.away_logo = await resolveTeamLogo(s.away_team);
-        changed = true;
-      }
-    } catch { /* ignore */ }
+    const needsArt = !s.card_bg || isBadgeImageUrl(s.card_bg);
+    if (!s.home_logo || !s.away_logo || needsArt) {
+      try {
+        const enriched = await enrichEventLogos(s);
+        if (enriched.home_logo && enriched.home_logo !== s.home_logo) {
+          s.home_logo = enriched.home_logo;
+          changed = true;
+        }
+        if (enriched.away_logo && enriched.away_logo !== s.away_logo) {
+          s.away_logo = enriched.away_logo;
+          changed = true;
+        }
+        if (enriched.card_bg && enriched.card_bg !== s.card_bg) {
+          s.card_bg = enriched.card_bg;
+          s.card_bg_team = enriched.card_bg_team;
+          changed = true;
+        }
+        // Nunca persistir escudo como fundo
+        if (s.card_bg && isBadgeImageUrl(s.card_bg)) {
+          s.card_bg = null;
+          s.card_bg_team = null;
+          changed = true;
+        }
+      } catch { /* ignore */ }
+    }
   }
   if (changed) {
     saveDiskCache(DATA_DIR);
