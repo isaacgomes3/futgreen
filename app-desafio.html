@@ -4,26 +4,111 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
-  <title>Jornada · FUTGRN</title>
+  <title>Desafio · FUTGRN</title>
   <link rel="stylesheet" href="/public/css/futgreen.css" />
 </head>
 <body>
   <div class="fg-shell" id="fg-shell-root">
     <main class="fg-main">
-      <section class="fg-section fg-coming-soon">
-        <p class="fg-coming-soon-badge">Em breve</p>
-        <h1 class="fg-page-title" style="margin-bottom:0.5rem">Jornada</h1>
-        <p class="lead" style="max-width:36ch">Esta área está em construção. Em breve você opera a grade e acompanha suas entradas por aqui.</p>
-        <div class="fg-cta-row" style="margin-top:1.25rem;display:flex;gap:0.65rem;flex-wrap:wrap">
-          <a class="fg-btn" href="/app-proteger.html">Ir para Proteger</a>
-          <a class="fg-btn ghost" href="/app.html">Visão Geral</a>
-        </div>
+      <section class="fg-section">
+        <h2>Desafio FUTGRN</h2>
+        <p class="lead">Aposte na zebra com a odd FUTGRN · entrada sai da Carteira Jornada.</p>
+        <div id="lock" class="fg-empty" hidden></div>
+        <div id="grade" class="fg-grid"></div>
       </section>
     </main>
   </div>
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
-    await mountShell();
+    import { api, brl, toast, fmtWhen } from '/public/js/api.js';
+    import { previewSinal } from '/public/js/desafio-ciclo-math.js';
+    import { teamBlock } from '/public/js/teams-ui.js';
+
+    const me = await mountShell();
+    const data = await api('/api/futgreen/desafios');
+    const lock = document.getElementById('lock');
+    const grade = document.getElementById('grade');
+
+    if (!data.unlocked) {
+      lock.hidden = false;
+      lock.innerHTML = `Carteira Jornada vazia. <a href="/app-carteira.html">Ir à Carteira</a>`;
+    }
+
+    if (!data.desafios?.length) {
+      grade.innerHTML = data.unlocked
+        ? '<p class="fg-empty">Nenhum desafio publicado no momento.</p>'
+        : '';
+    } else {
+      grade.innerHTML = data.desafios
+        .flatMap(({ desafio, steps }) =>
+          (steps || [])
+            .filter((s) => s.status !== 'done')
+            .map((step) => {
+              const stakeDefault = 50;
+              const prev = previewSinal(step, stakeDefault);
+              const teamLabel =
+                step.bet_team_side === 'away' ? step.away_team : step.home_team;
+              const closed = new Date(step.starts_at || 0).getTime() <= Date.now() || step.status === 'live';
+              return `
+              <article class="fg-match" data-desafio="${desafio.id}" data-step="${step.id}">
+                <div class="fg-meta">${desafio.title} · etapa ${step.step_index} · ${fmtWhen(step.starts_at)}</div>
+                <div class="fg-match-teams">
+                  ${teamBlock(step.home_team, step.home_logo)}
+                  <div class="fg-vs">×</div>
+                  ${teamBlock(step.away_team, step.away_logo)}
+                </div>
+                <div class="fg-meta">Zebra no time: <strong>${teamLabel}</strong> · mercado ${step.market_flag || 'dnb'}</div>
+                <div class="fg-desafio-panels">
+                  <div class="fg-panel">
+                    <h4>FUTGRN</h4>
+                    <div class="odd">${Number(step.odd_futgreen).toFixed(2)}</div>
+                    <div class="fg-meta">Liq. ${brl((step.liquidity || 0) * 100)}</div>
+                  </div>
+                  <div class="fg-panel casa">
+                    <h4>${step.casa_name || 'Casa'} <img src="${step.casa_logo || '/public/assets/casa-default.svg'}" alt="" width="18" height="18" style="vertical-align:middle" /></h4>
+                    <div class="odd">${Number(step.odd_casa).toFixed(2)}</div>
+                    <div class="fg-meta">Sugerido ~ ${prev.houseStake.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                  </div>
+                </div>
+                ${
+                  closed
+                    ? `<p class="fg-empty" style="margin:0.6rem 0 0">Partida iniciada — entrada encerrada.</p>`
+                    : `<form class="fg-form entry-form">
+                  <label>Stake FUTGRN (R$)
+                    <input name="stake" type="number" min="1" step="0.01" value="${stakeDefault}" required />
+                  </label>
+                  <button class="fg-btn" type="submit">Apostar na FUTGRN</button>
+                </form>`
+                }
+              </article>`;
+            }),
+        )
+        .join('') || '<p class="fg-empty">Nenhum desafio publicado no momento.</p>';
+
+      grade.querySelectorAll('.entry-form').forEach((form) => {
+        form.onsubmit = async (e) => {
+          e.preventDefault();
+          if (me.impersonating) return toast('Espelho: Desafio é readonly');
+          const art = form.closest('.fg-match');
+          const stake = Number(new FormData(form).get('stake'));
+          if (!(stake > 0)) return toast('Informe o valor da entrada');
+          try {
+            await api('/api/futgreen/desafio-register', {
+              method: 'POST',
+              body: {
+                desafio_id: art.dataset.desafio,
+                step_id: art.dataset.step,
+                stake,
+              },
+            });
+            toast('Entrada registrada');
+            location.reload();
+          } catch (err) {
+            toast(err.message);
+          }
+        };
+      });
+    }
   </script>
 </body>
 </html>

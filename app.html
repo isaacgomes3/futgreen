@@ -79,7 +79,7 @@
             <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Proteger</h3>
           </a>
           <a class="fg-match" href="/app-desafio.html">
-            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Jornada</h3>
+            <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Desafio</h3>
           </a>
           <a class="fg-match" href="/app-carteira.html">
             <h3 style="margin:0;font-family:var(--font-display);font-style:italic;text-transform:uppercase">Carteira</h3>
@@ -241,7 +241,7 @@
           ? 'Ao vivo'
           : fmtKickBadge(ev.starts_at);
       const meta = ev.meta || '';
-      const cta = ev.past ? 'Ver histórico →' : ev.kind === 'jornada' ? 'Abrir Jornada →' : 'Proteger →';
+      const cta = ev.past ? 'Ver histórico →' : ev.kind === 'jornada' ? 'Abrir Desafio →' : 'Proteger →';
       const home = shortTeamName(ev.home_team);
       const away = shortTeamName(ev.away_team);
       return `
@@ -361,7 +361,7 @@
                 step.bet_team_side === 'away' ? step.away_team : step.home_team;
               return {
                 kind: 'jornada',
-                kindLabel: 'Jornada',
+                kindLabel: 'Desafio',
                 href: '/app-desafio.html',
                 home_team: step.home_team,
                 away_team: step.away_team,
@@ -414,7 +414,7 @@
             .filter((s) => s.status === 'done' || kickoffPassed(s.starts_at, now))
             .map((step) => ({
               kind: 'jornada',
-              kindLabel: 'Jornada',
+              kindLabel: 'Desafio',
               href: '/app-desafio.html',
               home_team: step.home_team,
               away_team: step.away_team,

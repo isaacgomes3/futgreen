@@ -5,7 +5,7 @@ const CLIENT_LINKS = [
   { href: '/app.html', label: 'Visão Geral', ico: '◈', group: 'OPERAÇÕES' },
   { href: '/app-proteger.html', label: 'Proteger', ico: '🛡', group: 'OPERAÇÕES' },
   { href: '/app-protecoes.html', label: 'Minhas Proteções', ico: '◎', group: 'OPERAÇÕES' },
-  { href: '/app-desafio.html', label: 'Jornada', ico: '⚡', group: 'OPERAÇÕES', novo: true },
+  { href: '/app-desafio.html', label: 'Desafio', ico: '⚡', group: 'OPERAÇÕES' },
   { href: '/app-carteira.html', label: 'Carteira', ico: '₿', group: 'OPERAÇÕES' },
   { href: '/app-indicacao.html', label: 'Indicação', ico: '↗', group: 'OPERAÇÕES' },
 ];
@@ -163,7 +163,7 @@ export async function mountShell({ admin = false } = {}) {
     const ban = document.createElement('div');
     ban.className = 'fg-banner fg-banner-deposit';
     ban.innerHTML =
-      'Conta criada. <strong>Faça o depósito PIX</strong> para liberar Proteger, Jornada e as demais funções.';
+      'Conta criada. <strong>Faça o depósito PIX</strong> para liberar Proteger, Desafio e as demais funções.';
     root.prepend(ban);
   }
 
