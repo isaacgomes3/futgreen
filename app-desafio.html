@@ -71,6 +71,33 @@
     let byKey = {};
     let unlockedWallet = false;
 
+    const BETBRA_ICON = `<svg class="fg-betbra-mark" viewBox="0 0 64 64" width="22" height="22" aria-hidden="true">
+      <g transform="translate(32 32) skewX(-10) translate(-32 -32)">
+        <path fill="#00A651" d="M13 7h21c9.5 0 16 5.4 16 13.6 0 5-2.6 9-7 10.9 5.4 1.6 9 6.2 9 12.4C52 55.2 44.6 61 33.8 61H13V7z"/>
+        <path fill="#0a0e0c" d="M25 17h9.2c4.2 0 6.6 2 6.6 5.4s-2.4 5.4-6.6 5.4H25V17z"/>
+        <path fill="#0a0e0c" d="M25 37h10.4c4.8 0 7.6 2.6 7.6 6.8S40.2 51 35.4 51H25V37z"/>
+        <rect x="9" y="6" width="13" height="52" rx="1.5" fill="#FFCC29"/>
+        <circle cx="35" cy="38" r="17" fill="#FFCC29"/>
+        <circle cx="35" cy="38" r="7.5" fill="#3E5FBF"/>
+      </g>
+    </svg>`;
+
+    function betbraMarketUrl(step) {
+      if (!step) return null;
+      if (step.exchange_url) return step.exchange_url;
+      const eventId = step.external_id;
+      if (!eventId) return null;
+      return `https://betbra.bet.br/b/exchange/sport/soccer/event/${encodeURIComponent(eventId)}`;
+    }
+
+    function betbraLinkHtml(url, { compact = false, label = 'BetBra' } = {}) {
+      if (!url) return '';
+      if (compact) {
+        return `<a class="fg-ind-betbra" href="${url}" target="_blank" rel="noopener" title="Abrir na BetBra" data-act="betbra">${BETBRA_ICON}<span class="fg-sr-only">BetBra</span></a>`;
+      }
+      return `<a class="fg-ind-betbra fg-ind-betbra-label" href="${url}" target="_blank" rel="noopener" title="Abrir na BetBra" data-act="betbra">${BETBRA_ICON}<span>${label}</span></a>`;
+    }
+
     /** Prefixo de clube no início → usar o segundo nome (FC Porto → Porto). */
     const TEAM_PREFIX = /^(fc|ac|sc|st|cf|cd|afc|as|ss|sv|rc|rcd|ud|sd|bk|fk|sk|nk|vk)$/i;
 
@@ -182,16 +209,20 @@
             <div class="fg-ind-mkt-row">
               <div class="fg-ind-mkt" style="cursor:default">
                 <span class="fg-ind-mkt-line">
-                  <span class="fg-ind-mkt-main">
-                    <strong>${step.casa_name || 'Casa'}</strong>
-                    <span class="fg-meta" style="margin:0">Referência</span>
+                  <span class="fg-ind-mkt-main" style="flex-direction:row;align-items:center;gap:0.5rem">
+                    ${BETBRA_ICON}
+                    <span>
+                      <strong>BetBra</strong>
+                      <span class="fg-meta" style="margin:0;display:block">Referência</span>
+                    </span>
                   </span>
                   <span class="fg-ind-mkt-odds">
-                    <span class="fg-prot-side is-lay">CASA</span>
+                    <span class="fg-prot-side is-lay">BETBRA</span>
                     <strong>${Number(step.odd_casa).toFixed(2)}</strong>
                   </span>
                 </span>
               </div>
+              ${betbraLinkHtml(betbraMarketUrl(step), { compact: true })}
             </div>
           </div>
         </div>
