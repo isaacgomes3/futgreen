@@ -14,106 +14,326 @@
         <h2>Desafio FUTGRN</h2>
         <p class="lead">Aposte na zebra com a odd FUTGRN · entrada sai da Carteira Jornada.</p>
         <div id="lock" class="fg-empty" hidden></div>
-        <div id="grade" class="fg-grid"></div>
+        <div id="grade" class="fg-grid fg-ind-grid"></div>
+      </section>
+      <section class="fg-section">
+        <h3 class="fg-finished-title">Desafios finalizados</h3>
+        <p class="fg-meta" style="margin-top:-0.35rem">Resultados · etapas que já foram liquidadas</p>
+        <div id="finished" class="fg-finished-list"></div>
       </section>
     </main>
   </div>
+
+  <!-- Entrada / apostar na FUTGRN -->
+  <div id="entry-modal" class="fg-modal" hidden>
+    <div class="fg-modal-backdrop" data-act="close"></div>
+    <div class="fg-modal-panel" role="dialog" aria-modal="true" aria-labelledby="entry-modal-title">
+      <button type="button" class="fg-modal-x" data-act="close" aria-label="Fechar">×</button>
+      <h3 id="entry-modal-title">Entrada · Desafio FUTGRN</h3>
+      <p id="entry-modal-event" class="fg-meta"></p>
+      <div class="fg-prot-locked">
+        <div>
+          <span class="fg-meta" style="margin:0">Zebra</span>
+          <strong id="entry-modal-team">—</strong>
+        </div>
+        <div>
+          <span class="fg-meta" style="margin:0">Lado</span>
+          <strong id="entry-modal-side" class="fg-prot-side is-back">FUTGRN</strong>
+        </div>
+        <div>
+          <span class="fg-meta" style="margin:0">Odd</span>
+          <strong id="entry-modal-odd">—</strong>
+        </div>
+      </div>
+      <form id="entry-form" class="fg-form">
+        <label>
+          Stake FUTGRN (R$)
+          <input name="stake" type="number" step="0.01" min="1" value="50" required autocomplete="off" />
+        </label>
+        <div id="entry-preview" class="fg-prot-preview"></div>
+        <button class="fg-btn" type="submit">Apostar na FUTGRN</button>
+      </form>
+    </div>
+  </div>
+
   <script type="module">
     import { mountShell } from '/public/js/v2-shell.js';
-    import { api, brl, toast, fmtWhen } from '/public/js/api.js';
+    import { api, toast, fmtWhen, brl } from '/public/js/api.js';
     import { previewSinal } from '/public/js/desafio-ciclo-math.js';
-    import { teamBlock } from '/public/js/teams-ui.js';
 
     const me = await mountShell();
-    // preview=1: mostra a vitrine de desafios publicados mesmo com a Carteira Jornada vazia;
-    // a entrada (aposta) continua bloqueada até o depósito, via unlocked.
-    const data = await api('/api/futgreen/desafios?preview=1');
-    const lock = document.getElementById('lock');
     const grade = document.getElementById('grade');
+    const finishedBox = document.getElementById('finished');
+    const lock = document.getElementById('lock');
+    const modal = document.getElementById('entry-modal');
+    const form = document.getElementById('entry-form');
+    let current = null;
+    let byKey = {};
+    let unlockedWallet = false;
 
-    if (!data.unlocked) {
-      lock.hidden = false;
-      lock.innerHTML = `Carteira Jornada vazia — você pode ver os desafios, mas precisa depositar para entrar. <a href="/app-carteira.html">Ir à Carteira</a>`;
+    /** Prefixo de clube no início → usar o segundo nome (FC Porto → Porto). */
+    const TEAM_PREFIX = /^(fc|ac|sc|st|cf|cd|afc|as|ss|sv|rc|rcd|ud|sd|bk|fk|sk|nk|vk)$/i;
+
+    function shortTeamName(name) {
+      const raw = String(name || '').trim();
+      if (!raw) return '—';
+      const parts = raw.split(/\s+/).filter(Boolean);
+      if (parts.length <= 1) return raw;
+      if (TEAM_PREFIX.test(parts[0])) return parts[1] || parts[0];
+      return parts[0];
     }
 
-    if (!data.desafios?.length) {
-      grade.innerHTML = '<p class="fg-empty">Nenhum desafio publicado no momento.</p>';
-    } else {
-      grade.innerHTML = data.desafios
-        .flatMap(({ desafio, steps }) =>
-          (steps || [])
-            .filter((s) => s.status !== 'done')
-            .map((step) => {
-              const stakeDefault = 50;
-              const prev = previewSinal(step, stakeDefault);
-              const teamLabel =
-                step.bet_team_side === 'away' ? step.away_team : step.home_team;
-              const closed = new Date(step.starts_at || 0).getTime() <= Date.now() || step.status === 'live';
-              const blockedMsg = closed
-                ? 'Partida iniciada — entrada encerrada.'
-                : !data.unlocked
-                  ? 'Deposite na Carteira Jornada para entrar nesse desafio.'
-                  : null;
-              return `
-              <article class="fg-match" data-desafio="${desafio.id}" data-step="${step.id}">
-                <div class="fg-meta">${desafio.title} · etapa ${step.step_index} · ${fmtWhen(step.starts_at)}</div>
-                <div class="fg-match-teams">
-                  ${teamBlock(step.home_team, step.home_logo)}
-                  <div class="fg-vs">×</div>
-                  ${teamBlock(step.away_team, step.away_logo)}
-                </div>
-                <div class="fg-meta">Zebra no time: <strong>${teamLabel}</strong> · mercado ${step.market_flag || 'dnb'}</div>
-                <div class="fg-desafio-panels">
-                  <div class="fg-panel">
-                    <h4>FUTGRN</h4>
-                    <div class="odd">${Number(step.odd_futgreen).toFixed(2)}</div>
-                    <div class="fg-meta">Liq. ${brl((step.liquidity || 0) * 100)}</div>
-                  </div>
-                  <div class="fg-panel casa">
-                    <h4>${step.casa_name || 'Casa'} <img src="${step.casa_logo || '/public/assets/casa-default.svg'}" alt="" width="18" height="18" style="vertical-align:middle" /></h4>
-                    <div class="odd">${Number(step.odd_casa).toFixed(2)}</div>
-                    <div class="fg-meta">Sugerido ~ ${prev.houseStake.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                  </div>
-                </div>
-                ${
-                  blockedMsg
-                    ? `<p class="fg-empty" style="margin:0.6rem 0 0">${blockedMsg}</p>`
-                    : `<form class="fg-form entry-form">
-                  <label>Stake FUTGRN (R$)
-                    <input name="stake" type="number" min="1" step="0.01" value="${stakeDefault}" required />
-                  </label>
-                  <button class="fg-btn" type="submit">Apostar na FUTGRN</button>
-                </form>`
-                }
-              </article>`;
-            }),
-        )
-        .join('') || '<p class="fg-empty">Nenhum desafio publicado no momento.</p>';
+    function fmtKickBadge(iso) {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        const now = new Date();
+        const sameDay = d.toDateString() === now.toDateString();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        const isTomorrow = d.toDateString() === tomorrow.toDateString();
+        const hm = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (sameDay) return `Hoje ${hm}`;
+        if (isTomorrow) return `Amanhã ${hm}`;
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return fmtWhen(iso);
+      }
+    }
 
-      grade.querySelectorAll('.entry-form').forEach((form) => {
-        form.onsubmit = async (e) => {
-          e.preventDefault();
-          if (me.impersonating) return toast('Espelho: Desafio é readonly');
-          const art = form.closest('.fg-match');
-          const stake = Number(new FormData(form).get('stake'));
-          if (!(stake > 0)) return toast('Informe o valor da entrada');
-          try {
-            await api('/api/futgreen/desafio-register', {
-              method: 'POST',
-              body: {
-                desafio_id: art.dataset.desafio,
-                step_id: art.dataset.step,
-                stake,
-              },
-            });
-            toast('Entrada registrada');
-            location.reload();
-          } catch (err) {
-            toast(err.message);
-          }
+    function kickoffPassed(startsAt, now = Date.now()) {
+      const t = new Date(startsAt || 0).getTime();
+      return Number.isFinite(t) && t > 0 && now >= t;
+    }
+
+    function stepClosed(step) {
+      return step.status === 'live' || step.status === 'done' || kickoffPassed(step.starts_at);
+    }
+
+    function statusBadgeHtml(step) {
+      if (step.status === 'done') {
+        return `<span class="fg-ind-when fg-ind-when-ft">Encerrado</span>`;
+      }
+      if (stepClosed(step)) {
+        return `<span class="fg-ind-when fg-ind-when-live"><span class="fg-ind-live-dot" aria-hidden="true"></span>Ao vivo</span>`;
+      }
+      return `<span class="fg-ind-when">${fmtKickBadge(step.starts_at)}</span>`;
+    }
+
+    function teamRowHtml(name, logo, score) {
+      const scoreHtml = score == null ? '' : `<span class="fg-ind-team-score">${score}</span>`;
+      return `
+        <div class="fg-ind-team">
+          <div class="fg-ind-team-main">
+            ${logo ? `<img src="${logo}" alt="" width="30" height="30" />` : ''}
+            <strong title="${name}">${shortTeamName(name)}</strong>
+          </div>
+          ${scoreHtml}
+        </div>`;
+    }
+
+    function resultLabel(step) {
+      if (step.result === 'zebra_protected') return 'Zebra venceu (FUTGRN)';
+      if (step.result === 'win') return 'Casa venceu';
+      if (step.result === 'empate_anula') return 'Empate anula';
+      return 'Liquidado';
+    }
+
+    function stepCardHtml(desafio, step) {
+      const zebraTeam = step.bet_team_side === 'away' ? step.away_team : step.home_team;
+      const closed = stepClosed(step);
+      const canEnter = !closed && unlockedWallet;
+      const key = `${desafio.id}|${step.id}`;
+      const bg = step.home_logo || step.away_logo ? '/public/assets/hero-stadium.jpg' : '/public/assets/hero-stadium.jpg';
+      return `
+      <article class="fg-match fg-ind-card${closed ? ' is-finished' : ''}" data-key="${key}">
+        <div class="fg-ind-media" aria-hidden="true">
+          <img class="fg-ind-photo" src="${bg}" alt="" loading="lazy" />
+        </div>
+        <div class="fg-ind-veil" aria-hidden="true"></div>
+        <div class="fg-ind-body">
+          <div class="fg-ind-top">
+            ${statusBadgeHtml(step)}
+            <span class="fg-ind-league" title="${desafio.title}">${desafio.title}</span>
+          </div>
+          <div class="fg-ind-teams">
+            ${teamRowHtml(step.home_team, step.home_logo, step.status === 'done' ? step.home_score ?? null : null)}
+            ${teamRowHtml(step.away_team, step.away_logo, step.status === 'done' ? step.away_score ?? null : null)}
+          </div>
+          <div class="fg-ind-list">
+            <div class="fg-ind-list-head-row">
+              <div class="fg-ind-list-head">Zebra: ${shortTeamName(zebraTeam)} · mercado ${step.market_flag || 'dnb'}</div>
+            </div>
+            <div class="fg-ind-mkt-row">
+              <button type="button" class="fg-ind-mkt${!canEnter ? ' is-locked' : ''}" data-act="enter"
+                ${!canEnter ? `disabled title="${closed ? 'Partida iniciada — entrada encerrada' : 'Deposite na Carteira Jornada para entrar'}"` : ''}>
+                <span class="fg-ind-mkt-line">
+                  <span class="fg-ind-mkt-main">
+                    <strong>FUTGRN</strong>
+                    <span class="fg-meta" style="margin:0">Liq. ${brl((step.liquidity || 0) * 100)}</span>
+                  </span>
+                  <span class="fg-ind-mkt-odds">
+                    <span class="fg-prot-side is-back">FUTGRN</span>
+                    <strong>${Number(step.odd_futgreen).toFixed(2)}</strong>
+                  </span>
+                </span>
+              </button>
+            </div>
+            <div class="fg-ind-mkt-row">
+              <div class="fg-ind-mkt" style="cursor:default">
+                <span class="fg-ind-mkt-line">
+                  <span class="fg-ind-mkt-main">
+                    <strong>${step.casa_name || 'Casa'}</strong>
+                    <span class="fg-meta" style="margin:0">Referência</span>
+                  </span>
+                  <span class="fg-ind-mkt-odds">
+                    <span class="fg-prot-side is-lay">CASA</span>
+                    <strong>${Number(step.odd_casa).toFixed(2)}</strong>
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>`;
+    }
+
+    function finishedListHtml(items) {
+      if (!items.length) {
+        return '<p class="fg-empty">Nenhum desafio finalizado ainda.</p>';
+      }
+      return items
+        .map(({ desafio, step }) => {
+          const home = shortTeamName(step.home_team);
+          const away = shortTeamName(step.away_team);
+          const hs = step.home_score;
+          const as = step.away_score;
+          const hasScore = hs != null && as != null;
+          return `
+            <article class="fg-finished-row">
+              <div class="fg-finished-event">
+                <strong title="${step.home_team} × ${step.away_team}">${home} × ${away}</strong>
+                <span class="fg-meta" title="${desafio.title}">${resultLabel(step)}</span>
+              </div>
+              <div class="fg-finished-when">${fmtWhen(step.starts_at)}</div>
+              <div class="fg-finished-score" title="Placar final">
+                ${hasScore ? `<span>${hs}</span><span class="fg-ind-score-sep">–</span><span>${as}</span>` : '—'}
+              </div>
+            </article>`;
+        })
+        .join('');
+    }
+
+    function closeModal() {
+      current = null;
+      modal.hidden = true;
+    }
+
+    function renderPreview(step, stakeReais) {
+      const el = document.getElementById('entry-preview');
+      if (!(stakeReais > 0)) {
+        el.innerHTML = '<p class="fg-meta" style="margin:0">Informe o valor para ver o cálculo.</p>';
+        return;
+      }
+      const prev = previewSinal(step, stakeReais);
+      el.innerHTML = `
+        <div class="fg-prot-preview-grid">
+          <div><span>Se a zebra vencer</span><strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong></div>
+        </div>
+        <p class="fg-meta" style="margin:0.45rem 0 0">
+          Se a zebra não vencer (Casa ou Empate Anula): sem crédito adicional — stake permanece com a plataforma
+          exceto Empate Anula, que estorna integralmente na Carteira Jornada.
+        </p>`;
+    }
+
+    function openEntryModal(desafio, step) {
+      if (me.impersonating) return toast('Espelho: Desafio é readonly');
+      if (stepClosed(step)) return toast('Partida já iniciada — entrada encerrada');
+      if (!unlockedWallet) return toast('Deposite na Carteira Jornada para entrar');
+      current = { desafio, step };
+      const zebraTeam = step.bet_team_side === 'away' ? step.away_team : step.home_team;
+      document.getElementById('entry-modal-event').textContent =
+        `${step.home_team} × ${step.away_team} · ${fmtWhen(step.starts_at)}`;
+      document.getElementById('entry-modal-team').textContent = zebraTeam;
+      document.getElementById('entry-modal-odd').textContent = Number(step.odd_futgreen).toFixed(2);
+      form.stake.value = '50';
+      renderPreview(step, 50);
+      modal.hidden = false;
+      form.stake.focus();
+    }
+
+    function bindCards(root) {
+      root.querySelectorAll('[data-act="enter"]').forEach((btn) => {
+        btn.onclick = () => {
+          const art = btn.closest('.fg-ind-card');
+          const item = byKey[art.dataset.key];
+          if (!item) return;
+          openEntryModal(item.desafio, item.step);
         };
       });
     }
+
+    modal.querySelectorAll('[data-act="close"]').forEach((el) => {
+      el.onclick = closeModal;
+    });
+    form.stake.addEventListener('input', () => {
+      if (!current) return;
+      renderPreview(current.step, Number(form.stake.value));
+    });
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      if (!current) return;
+      const stake = Number(form.stake.value);
+      if (!(stake > 0)) return toast('Informe o valor da entrada');
+      try {
+        await api('/api/futgreen/desafio-register', {
+          method: 'POST',
+          body: { desafio_id: current.desafio.id, step_id: current.step.id, stake },
+        });
+        toast('Entrada registrada');
+        closeModal();
+        await load();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    async function load() {
+      // preview=1: mostra a vitrine de desafios publicados mesmo com a Carteira Jornada vazia;
+      // a entrada (aposta) continua bloqueada até o depósito, via unlocked.
+      const data = await api('/api/futgreen/desafios?preview=1');
+      unlockedWallet = Boolean(data.unlocked);
+
+      if (!unlockedWallet) {
+        lock.hidden = false;
+        lock.innerHTML = `Carteira Jornada vazia — você pode ver os desafios, mas precisa depositar para entrar. <a href="/app-carteira.html">Ir à Carteira</a>`;
+      } else {
+        lock.hidden = true;
+      }
+
+      const open = [];
+      const finished = [];
+      byKey = {};
+      for (const { desafio, steps } of data.desafios || []) {
+        for (const step of steps || []) {
+          const key = `${desafio.id}|${step.id}`;
+          byKey[key] = { desafio, step };
+          if (step.status === 'done') finished.push({ desafio, step });
+          else open.push({ desafio, step });
+        }
+      }
+      open.sort((a, b) => new Date(a.step.starts_at || 0) - new Date(b.step.starts_at || 0));
+      finished.sort((a, b) => new Date(b.step.starts_at || 0) - new Date(a.step.starts_at || 0));
+
+      grade.innerHTML = open.length
+        ? open.map(({ desafio, step }) => stepCardHtml(desafio, step)).join('')
+        : '<p class="fg-empty">Nenhum desafio publicado no momento.</p>';
+      bindCards(grade);
+
+      finishedBox.innerHTML = finishedListHtml(finished);
+    }
+
+    await load();
   </script>
 </body>
 </html>
