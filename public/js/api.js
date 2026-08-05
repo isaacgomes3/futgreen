@@ -83,3 +83,38 @@ export function fmtWhen(iso) {
     return iso;
   }
 }
+
+/**
+ * Responsividade global — qualquer <table> da aplicação (estática ou renderizada
+ * dinamicamente via innerHTML) ganha rolagem horizontal automática em telas pequenas,
+ * sem precisar editar cada página admin/financeiro que gera tabelas via JS.
+ */
+function wrapTableForScroll(table) {
+  if (!table || table.closest('.fg-table-wrap')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'fg-table-wrap';
+  table.parentNode.insertBefore(wrap, table);
+  wrap.appendChild(table);
+}
+
+function wrapAllTables(root) {
+  (root.querySelectorAll ? root.querySelectorAll('table') : []).forEach(wrapTableForScroll);
+}
+
+if (typeof document !== 'undefined') {
+  const start = () => wrapAllTables(document);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+  new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      m.addedNodes.forEach((node) => {
+        if (node.nodeType !== 1) return;
+        if (node.tagName === 'TABLE') wrapTableForScroll(node);
+        else wrapAllTables(node);
+      });
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true });
+}
