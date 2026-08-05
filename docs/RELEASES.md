@@ -1,5 +1,12 @@
 # Releases ArbiShield
 
+## arbishield-1.3.3 (2026-08)
+
+- Feat: sync de placar ganha uma terceira fonte — FotMob (API pública não-oficial usada pelo próprio site/app, `fotmob.com/api/data/matches?date=YYYYMMDD`), com cobertura de 500+ competições
+  - Ordem de preferência: 1) feed in-play BetBra (external_id exato) → 2) FotMob (nome dos times, cobertura ampla) → 3) TheSportsDB (último fallback)
+  - Resolveu o caso Minnesota United × Juárez (Leagues Cup) que não estava em nenhuma das outras duas fontes — FotMob tinha o placar certo (1-2, intervalo)
+  - `scoreFromFotmobMatch` exportado e testado em `tests/live-score-sync.test.mjs`
+
 ## arbishield-1.3.2 (2026-08)
 
 - Feat: sync de placar passa a usar também o feed in-play da própria BetBra/Bolsa de Aposta (`client/api/jumper/feedSports/inplay-info`, mesma infra "jumper" nos dois domínios) — casamento exato por `external_id`, sem depender de heurística de nome de time

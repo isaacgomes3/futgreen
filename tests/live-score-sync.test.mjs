@@ -4,6 +4,7 @@ import {
   stepsNeedingScoreSync,
   matchesNeedingScoreSync,
   scoreFromInplayEntry,
+  scoreFromFotmobMatch,
 } from '../scripts/lib/live-score-sync.mjs';
 
 assert.equal(normalizeTeamKey('Palmeiras'), normalizeTeamKey('SE Palmeiras'));
@@ -54,6 +55,46 @@ assert.ok(normalizeTeamKey('Fortaleza EC').includes('fortaleza'));
 
   assert.equal(scoreFromInplayEntry(null), null);
   assert.equal(scoreFromInplayEntry({ eventId: 'y' }), null);
+}
+
+// FotMob (API pública não-oficial) — cobertura ampla para competições fora do
+// TheSportsDB (ex.: Leagues Cup)
+{
+  const ht = scoreFromFotmobMatch({
+    id: 5844825,
+    home: { name: 'Minnesota', score: 1 },
+    away: { name: 'Juárez', score: 2 },
+    status: { started: true, finished: false, liveTime: { short: 'HT', long: 'Half-Time' } },
+  });
+  assert.equal(ht.home_score, 1);
+  assert.equal(ht.away_score, 2);
+  assert.equal(ht.period, 'ht');
+  assert.equal(ht.minute, 45);
+  assert.equal(ht.source, 'fotmob');
+
+  const live = scoreFromFotmobMatch({
+    home: { name: 'A', score: 0 },
+    away: { name: 'B', score: 0 },
+    status: { started: true, finished: false, liveTime: { short: "62'" } },
+  });
+  assert.equal(live.minute, 62);
+  assert.equal(live.period, null);
+
+  const notStarted = scoreFromFotmobMatch({
+    home: { name: 'A', score: 0 },
+    away: { name: 'B', score: 0 },
+    status: { started: false },
+  });
+  assert.equal(notStarted, null);
+
+  const finished = scoreFromFotmobMatch({
+    home: { name: 'A', score: 2 },
+    away: { name: 'B', score: 1 },
+    status: { started: true, finished: true, liveTime: { short: 'FT' } },
+  });
+  assert.equal(finished.finished, true);
+  assert.equal(finished.period, 'ft');
+  assert.equal(finished.minute, null);
 }
 
 console.log('live-score-sync.test OK');

@@ -1,8 +1,10 @@
 /**
- * Sync automático de placar. Duas fontes:
+ * Sync automático de placar. Três fontes, nesta ordem de preferência:
  * 1) Feed in-play da própria BetBra/Bolsa de Aposta (mesma infra "jumper") — casa por
- *    external_id exato (sem heurística de nome), preferencial quando disponível.
- * 2) TheSportsDB — fallback por nome dos times quando o evento não está no feed in-play.
+ *    external_id exato (sem heurística de nome).
+ * 2) FotMob (API pública não-oficial, mesma usada pelo site/app) — cobertura ampla
+ *    (500+ competições), casa por nome dos times no dia do jogo.
+ * 3) TheSportsDB — último fallback por nome dos times.
  * Atualiza home/away/minute/finished nos matches (Proteger) e nos steps de Desafio
  * ao vivo — nunca liquida proteção nem step (settle continua manual/admin).
  */
@@ -13,6 +15,10 @@ const API_KEY = () => process.env.SPORTSDB_API_KEY?.trim() || '3';
 const BETBRA_INPLAY_URL = 'https://betbra.bet.br/client/api/jumper/feedSports/inplay-info';
 const INPLAY_CACHE_TTL_MS = 20_000;
 let inplayCache = { at: 0, map: new Map() };
+
+const FOTMOB_MATCHES_URL = 'https://www.fotmob.com/api/data/matches';
+const FOTMOB_CACHE_TTL_MS = 30_000;
+const fotmobCache = new Map(); // dateKey(YYYYMMDD) → { at, matches: [] }
 
 const eventCache = new Map(); // key → { at, score }
 const CACHE_TTL_MS = 40_000;
@@ -156,6 +162,82 @@ export async function lookupScoreByExternalId(externalId) {
   const entry = map.get(String(externalId));
   if (!entry) return null;
   return scoreFromInplayEntry(entry);
+}
+
+export function scoreFromFotmobMatch(m) {
+  if (!m?.home || !m?.away) return null;
+  const hs = Number(m.home.score);
+  const as = Number(m.away.score);
+  if (!Number.isFinite(hs) || !Number.isFinite(as)) return null;
+  const status = m.status || {};
+  if (!status.started) return null;
+  const finished = Boolean(status.finished);
+  const liveShort = String(status.liveTime?.short || '').toUpperCase();
+  const halftime = liveShort === 'HT';
+  const period = halftime ? 'ht' : finished ? 'ft' : null;
+  const minuteMatch = liveShort.match(/(\d{1,3})/);
+  const minute = finished ? null : halftime ? 45 : minuteMatch ? Math.min(130, Number(minuteMatch[1])) : null;
+  return {
+    home_score: hs,
+    away_score: as,
+    finished,
+    minute,
+    period,
+    status: status.liveTime?.long || (finished ? 'FT' : null),
+    progress: liveShort || null,
+    event_id: m.id || null,
+    source: 'fotmob',
+  };
+}
+
+async function fetchFotmobMatchesByDate(dateKey) {
+  const hit = fotmobCache.get(dateKey);
+  if (hit && Date.now() - hit.at < FOTMOB_CACHE_TTL_MS) return hit.matches;
+  let matches = [];
+  try {
+    const ymd = dateKey.replace(/-/g, '');
+    const res = await fetch(`${FOTMOB_MATCHES_URL}?date=${ymd}`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      for (const lg of data.leagues || []) {
+        for (const m of lg.matches || []) matches.push(m);
+      }
+    }
+  } catch {
+    /* mantém lista vazia; segue fallback seguinte */
+  }
+  fotmobCache.set(dateKey, { at: Date.now(), matches });
+  return matches;
+}
+
+async function lookupScoreFotmob(homeTeam, awayTeam, startsAt) {
+  const home = String(homeTeam || '').trim();
+  const away = String(awayTeam || '').trim();
+  if (!home || !away) return null;
+
+  const base = startsAt ? new Date(startsAt) : new Date();
+  if (!Number.isFinite(base.getTime())) return null;
+  const dayKeys = new Set(
+    [-1, 0, 1].map((offset) => dayKeyUtc(new Date(base.getTime() + offset * 86_400_000))).filter(Boolean),
+  );
+
+  for (const dayKey of dayKeys) {
+    const matches = await fetchFotmobMatchesByDate(dayKey);
+    for (const m of matches) {
+      const mHome = m.home?.longName || m.home?.name;
+      const mAway = m.away?.longName || m.away?.name;
+      if (!teamsMatch(mHome, home) || !teamsMatch(mAway, away)) continue;
+      const scored = scoreFromFotmobMatch(m);
+      if (scored) return scored;
+    }
+  }
+  return null;
 }
 
 async function lookupScore(homeTeam, awayTeam, startsAt) {
@@ -338,6 +420,7 @@ export async function syncLiveScores(store, { force = false } = {}) {
       try {
         const score =
           (await lookupScoreByExternalId(m.external_id)) ||
+          (await lookupScoreFotmob(m.home_team, m.away_team, m.starts_at)) ||
           (await lookupScore(m.home_team, m.away_team, m.starts_at));
         if (!score) continue;
         const changed = applyScoreToMatch(m, score);
