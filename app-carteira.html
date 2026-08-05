@@ -25,6 +25,7 @@
                 <option value="apostador">Saldo Apostador</option>
                 <option value="desafio">Carteira Desafio</option>
                 <option value="provedor">Saldo Provedor</option>
+                <option value="automacao">Carteira Automação</option>
               </select>
             </label>
             <label>Valor (R$) <input name="amount" id="dep-amount" type="number" min="100" step="1" value="100" required /></label>
@@ -47,6 +48,17 @@
 
           <form id="transfer" class="fg-form fg-match">
             <h3 style="margin:0;font-family:var(--font-display)">Reembolso → Desafio</h3>
+            <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
+            <button class="fg-btn" type="submit">Transferir</button>
+          </form>
+          <form id="transfer-automacao" class="fg-form fg-match">
+            <h3 style="margin:0;font-family:var(--font-display)">Transferir → Automação</h3>
+            <label>De
+              <select name="from">
+                <option value="apostador">Saldo Apostador</option>
+                <option value="reembolso">Saldo Reembolso</option>
+              </select>
+            </label>
             <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
             <button class="fg-btn" type="submit">Transferir</button>
           </form>
@@ -75,6 +87,7 @@
     const depositOnly = Boolean(me?.deposit_only || me?.user?.deposit_only);
     if (depositOnly) {
       document.getElementById('transfer')?.closest('.fg-form')?.setAttribute('hidden', '');
+      document.getElementById('transfer-automacao')?.closest('.fg-form')?.setAttribute('hidden', '');
       document.getElementById('withdraw')?.closest('.fg-form')?.setAttribute('hidden', '');
       const dest = document.querySelector('#deposit select[name="dest"]');
       if (dest) {
@@ -193,6 +206,19 @@
       try {
         await api('/api/futgreen/transfer-desafio', { method: 'POST', body: { amount } });
         toast('Transferido para Carteira Desafio');
+        location.reload();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+
+    document.getElementById('transfer-automacao').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const amount = Number(fd.get('amount'));
+      try {
+        await api('/api/futgreen/transfer-automacao', { method: 'POST', body: { amount, from: fd.get('from') } });
+        toast('Transferido para Carteira Automação');
         location.reload();
       } catch (err) {
         toast(err.message);

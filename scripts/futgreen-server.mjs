@@ -68,6 +68,7 @@ import {
 } from './lib/match-phase.mjs';
 import { syncLiveScores, startLiveScoreScheduler } from './lib/live-score-sync.mjs';
 import { runAutoSettle } from './lib/auto-settle.mjs';
+import { fetchWorldNews } from './lib/news-feed.mjs';
 import {
   hashPassword,
   verifyPassword,
@@ -1099,6 +1100,43 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (p === '/api/futgreen/transfer-automacao' && method === 'POST') {
+    try {
+      const from = body.from === 'apostador' ? 'balance_cents' : 'deduction_balance_cents';
+      assertTransferAllowed(from, 'automacao_balance_cents');
+      const amount = Math.round(Number(body.amount_cents ?? Number(body.amount) * 100));
+      if (!(amount > 0)) return send(res, 400, { error: 'valor inválido' });
+      const u = store.getUser(ctx.user.id);
+      if ((u.wallet[from] || 0) < amount) {
+        return send(res, 400, { error: `${labelForBucket(from)} insuficiente` });
+      }
+      u.wallet[from] -= amount;
+      u.wallet.automacao_balance_cents = (u.wallet.automacao_balance_cents || 0) + amount;
+      store.addTx({
+        user_id: u.id,
+        type: from === 'balance_cents' ? 'transfer_apostador_to_automacao' : 'transfer_reembolso_to_automacao',
+        amount_cents: amount,
+        bucket: 'automacao_balance_cents',
+      });
+      store.save();
+      return send(res, 200, { wallet: u.wallet });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message, code: e.code });
+    }
+  }
+
+  if (p === '/api/futgreen/news' && method === 'GET') {
+    try {
+      const items = await fetchWorldNews({
+        lang: url.searchParams.get('lang') || 'pt-BR',
+        page: Number(url.searchParams.get('page') || 1),
+      });
+      return send(res, 200, { items: items.slice(0, Number(url.searchParams.get('limit') || 8)) });
+    } catch (e) {
+      return send(res, 200, { items: [], error: e.message });
+    }
+  }
+
   // —— Financeiro / admin ——
   if (p === '/api/futgreen/wallet' && method === 'GET') {
     const u = store.getUser(ctx.user.id);
@@ -1111,6 +1149,7 @@ async function handleApi(req, res, url) {
         desafio_balance_cents: labelForBucket('desafio_balance_cents'),
         investor_balance_cents: labelForBucket('investor_balance_cents'),
         demo_balance_cents: labelForBucket('demo_balance_cents'),
+        automacao_balance_cents: labelForBucket('automacao_balance_cents'),
       },
     });
   }

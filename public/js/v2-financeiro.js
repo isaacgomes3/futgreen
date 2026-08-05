@@ -7,6 +7,7 @@ export const BUCKET_LABELS = {
   desafio_balance_cents: 'Carteira Desafio',
   investor_balance_cents: 'Saldo Provedor',
   demo_balance_cents: 'Demo',
+  automacao_balance_cents: 'Carteira Automação',
 };
 
 export async function renderExtrato(container, { userId, limit = 100 } = {}) {
@@ -45,6 +46,7 @@ export async function renderWalletCards(container) {
     'deduction_balance_cents',
     'desafio_balance_cents',
     'investor_balance_cents',
+    'automacao_balance_cents',
     // Demo não aparece para cliente (só workshop local)
   ];
   container.innerHTML = `

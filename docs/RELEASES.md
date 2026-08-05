@@ -1,5 +1,13 @@
 # Releases ArbiShield
 
+## arbishield-1.7.0 (2026-08)
+
+- **Pedido explícito do dono** — nova Carteira Automação (`wallet-buckets-contract-v4`), ver `docs/SYSTEM_NON_REGRESSION.md`:
+  - Novo bucket independente `automacao_balance_cents`, visível no cliente (chips do topo e cartões da Carteira) e na lista/ajuste do admin (`admin-users.html`)
+  - Abastecido por: depósito manual do admin, depósito PIX direto (`dest=automacao`) e transferência a partir de Saldo Apostador ou Saldo Reembolso (novo endpoint `POST /api/futgreen/transfer-automacao`, novo form em `app-carteira.html`)
+  - Sem regra de liquidação própria — é saldo movimentável como os demais buckets manuais
+  - Novo teste em `tests/wallet-labels.test.mjs`
+
 ## arbishield-1.6.0 (2026-08)
 
 - **Pedido explícito do dono** — liquidação automática de Proteção e Desafio + cancelamento/suspensão de evento, ver `docs/SYSTEM_NON_REGRESSION.md` e `docs/FUNCIONAMENTO_DESAFIO_E_PROTECAO.md` §2.3a/§2.3b/§3.3b/§3.4:

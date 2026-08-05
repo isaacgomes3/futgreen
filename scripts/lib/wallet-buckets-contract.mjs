@@ -1,13 +1,16 @@
 /**
- * wallet-buckets-contract-v3
+ * wallet-buckets-contract-v4
  * Labels oficiais da UI ↔ colunas de profiles
  * Nunca exibir "Saldo Dedução" — nome oficial é Saldo Reembolso.
  * Carteira do produto Desafio = Carteira Desafio (coluna desafio_balance_cents).
  * "Jornada" é o nome legado (rebrand ArbiShield), mantido como alias.
  * Saldo Travado existe no modelo, mas não é superfície de UI (entrada sem trava).
+ * Carteira Automação (automacao_balance_cents) — pedido explícito do dono (2026-08-05):
+ * saldo independente, abastecido por depósito manual do admin, transferência de outras
+ * carteiras (Apostador/Reembolso) e depósito PIX direto.
  */
 
-export const WALLET_BUCKETS_VERSION = 'wallet-buckets-contract-v3';
+export const WALLET_BUCKETS_VERSION = 'wallet-buckets-contract-v4';
 
 export const BUCKETS = Object.freeze({
   balance_cents: {
@@ -45,6 +48,13 @@ export const BUCKETS = Object.freeze({
     aliases: [],
     uiVisible: true,
   },
+  automacao_balance_cents: {
+    column: 'automacao_balance_cents',
+    label: 'Carteira Automação',
+    shortLabel: 'Automação',
+    aliases: [],
+    uiVisible: true,
+  },
   demo_balance_cents: {
     column: 'demo_balance_cents',
     label: 'Demo',
@@ -72,7 +82,10 @@ export const TX_TYPES = Object.freeze({
   admin_adjustment_debit: 'Ajuste manual (débito)',
   provider_deposit: 'Crédito Provedor',
   manual_deposit: 'Depósito manual',
+  automacao_deposit: 'Depósito Automação',
   transfer_reembolso_to_desafio: 'Reembolso → Desafio',
+  transfer_apostador_to_automacao: 'Apostador → Automação',
+  transfer_reembolso_to_automacao: 'Reembolso → Automação',
   deduction_withdraw: 'Saque Saldo Reembolso',
   deduction_withdraw_hold: 'Saque Reembolso (reserva)',
   deduction_withdraw_paid: 'Saque Reembolso (pago)',
@@ -82,6 +95,8 @@ export const TX_TYPES = Object.freeze({
 /** Transferências permitidas entre buckets */
 export const ALLOWED_TRANSFERS = Object.freeze([
   { from: 'deduction_balance_cents', to: 'desafio_balance_cents', route: 'transfer-desafio' },
+  { from: 'balance_cents', to: 'automacao_balance_cents', route: 'transfer-automacao' },
+  { from: 'deduction_balance_cents', to: 'automacao_balance_cents', route: 'transfer-automacao' },
 ]);
 
 export function isTransferAllowed(from, to) {
@@ -129,5 +144,6 @@ export function emptyWallet() {
     desafio_balance_cents: 0,
     investor_balance_cents: 0,
     demo_balance_cents: 0,
+    automacao_balance_cents: 0,
   };
 }

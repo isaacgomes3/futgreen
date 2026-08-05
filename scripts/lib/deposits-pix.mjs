@@ -33,12 +33,14 @@ export function publicBaseUrl() {
 export function depositDestBucket(dest) {
   if (dest === 'desafio') return 'desafio_balance_cents';
   if (dest === 'provedor') return 'investor_balance_cents';
+  if (dest === 'automacao') return 'automacao_balance_cents';
   return 'balance_cents';
 }
 
 export function depositTxType(dest) {
   if (dest === 'desafio') return 'desafio_deposit';
   if (dest === 'provedor') return 'provider_deposit';
+  if (dest === 'automacao') return 'automacao_deposit';
   return 'manual_deposit';
 }
 
@@ -89,7 +91,7 @@ export async function createPixDeposit(
       min_deposit_cents: minCents,
     });
   }
-  const destN = ['apostador', 'desafio', 'provedor'].includes(dest) ? dest : 'apostador';
+  const destN = ['apostador', 'desafio', 'provedor', 'automacao'].includes(dest) ? dest : 'apostador';
   const user = store.getUser(userId);
   if (!user) throw Object.assign(new Error('Usuário não encontrado'), { status: 404 });
 

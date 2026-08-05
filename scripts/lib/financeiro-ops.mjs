@@ -341,6 +341,7 @@ export function buildFinanceMonitor(store, { day } = {}) {
       (w.balance_cents || 0) +
       (w.deduction_balance_cents || 0) +
       (w.desafio_balance_cents || 0) +
+      (w.automacao_balance_cents || 0) +
       (w.locked_balance_cents || 0)
     );
   }, 0);
