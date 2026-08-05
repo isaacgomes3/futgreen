@@ -25,19 +25,19 @@
     import { teamBlock } from '/public/js/teams-ui.js';
 
     const me = await mountShell();
-    const data = await api('/api/futgreen/desafios');
+    // preview=1: mostra a vitrine de desafios publicados mesmo com a Carteira Jornada vazia;
+    // a entrada (aposta) continua bloqueada até o depósito, via unlocked.
+    const data = await api('/api/futgreen/desafios?preview=1');
     const lock = document.getElementById('lock');
     const grade = document.getElementById('grade');
 
     if (!data.unlocked) {
       lock.hidden = false;
-      lock.innerHTML = `Carteira Jornada vazia. <a href="/app-carteira.html">Ir à Carteira</a>`;
+      lock.innerHTML = `Carteira Jornada vazia — você pode ver os desafios, mas precisa depositar para entrar. <a href="/app-carteira.html">Ir à Carteira</a>`;
     }
 
     if (!data.desafios?.length) {
-      grade.innerHTML = data.unlocked
-        ? '<p class="fg-empty">Nenhum desafio publicado no momento.</p>'
-        : '';
+      grade.innerHTML = '<p class="fg-empty">Nenhum desafio publicado no momento.</p>';
     } else {
       grade.innerHTML = data.desafios
         .flatMap(({ desafio, steps }) =>
@@ -49,6 +49,11 @@
               const teamLabel =
                 step.bet_team_side === 'away' ? step.away_team : step.home_team;
               const closed = new Date(step.starts_at || 0).getTime() <= Date.now() || step.status === 'live';
+              const blockedMsg = closed
+                ? 'Partida iniciada — entrada encerrada.'
+                : !data.unlocked
+                  ? 'Deposite na Carteira Jornada para entrar nesse desafio.'
+                  : null;
               return `
               <article class="fg-match" data-desafio="${desafio.id}" data-step="${step.id}">
                 <div class="fg-meta">${desafio.title} · etapa ${step.step_index} · ${fmtWhen(step.starts_at)}</div>
@@ -71,8 +76,8 @@
                   </div>
                 </div>
                 ${
-                  closed
-                    ? `<p class="fg-empty" style="margin:0.6rem 0 0">Partida iniciada — entrada encerrada.</p>`
+                  blockedMsg
+                    ? `<p class="fg-empty" style="margin:0.6rem 0 0">${blockedMsg}</p>`
                     : `<form class="fg-form entry-form">
                   <label>Stake FUTGRN (R$)
                     <input name="stake" type="number" min="1" step="0.01" value="${stakeDefault}" required />
