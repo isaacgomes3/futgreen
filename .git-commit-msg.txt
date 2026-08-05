@@ -1,0 +1,5 @@
+fix(desafio): faixa de liga não cai mais para desafio.title (nome dos times) quando step.league é vazio
+
+- Desafios criados antes do fix v1.3.1 não tinham step.league salvo, então o fallback antigo (desafio.title, que por padrão é "Time A × Time B") continuava mostrando os times
+- Fallback agora é "Futebol" genérico, igual ao padrão do card de Proteção
+- Backfill manual em produção do league="Leagues Cup" para o step Minnesota United x Juárez já publicado

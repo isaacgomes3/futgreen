@@ -219,7 +219,7 @@
         <div class="fg-ind-body">
           <div class="fg-ind-top">
             ${statusBadgeHtml(step)}
-            <span class="fg-ind-league" title="${step.league || desafio.title}">${shortLeagueName(step.league || desafio.title)}</span>
+            <span class="fg-ind-league" title="${step.league || 'Futebol'}">${shortLeagueName(step.league)}</span>
           </div>
           <div class="fg-ind-teams">
             ${teamRowHtml(step.home_team, step.home_logo, step.status === 'done' ? (step.home_score ?? 0) : (isStepLive(step) ? (step.display_home_score ?? step.home_score ?? 0) : null))}
