@@ -1,5 +1,11 @@
 # Releases ArbiShield
 
+## arbishield-1.3.4 (2026-08)
+
+- Feat: sync de placar agora também preenche o escudo do time (home_logo/away_logo) com a imagem do FotMob (`images.fotmob.com/image_resources/logo/teamlogo/{id}_small.png`) quando o card não tem logo — usa o `id` do time que já vem no mesmo payload do FotMob usado pra achar o placar, sem precisar de outra chamada
+  - Só preenche quando o campo está vazio (nunca sobrescreve um logo já resolvido por outra fonte)
+  - Propaga entre match (Proteger) e step (Desafio) do mesmo evento, igual ao placar
+
 ## arbishield-1.3.3 (2026-08)
 
 - Feat: sync de placar ganha uma terceira fonte — FotMob (API pública não-oficial usada pelo próprio site/app, `fotmob.com/api/data/matches?date=YYYYMMDD`), com cobertura de 500+ competições

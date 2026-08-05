@@ -20,6 +20,12 @@ const FOTMOB_MATCHES_URL = 'https://www.fotmob.com/api/data/matches';
 const FOTMOB_CACHE_TTL_MS = 30_000;
 const fotmobCache = new Map(); // dateKey(YYYYMMDD) → { at, matches: [] }
 
+export function fotmobLogoUrl(teamId) {
+  const id = String(teamId || '').trim();
+  if (!id || !/^\d+$/.test(id)) return null;
+  return `https://images.fotmob.com/image_resources/logo/teamlogo/${id}_small.png`;
+}
+
 const eventCache = new Map(); // key → { at, score }
 const CACHE_TTL_MS = 40_000;
 const GLOBAL_COOLDOWN_MS = 35_000;
@@ -186,6 +192,8 @@ export function scoreFromFotmobMatch(m) {
     status: status.liveTime?.long || (finished ? 'FT' : null),
     progress: liveShort || null,
     event_id: m.id || null,
+    home_team_id: m.home.id ?? null,
+    away_team_id: m.away.id ?? null,
     source: 'fotmob',
   };
 }
@@ -336,6 +344,18 @@ function applyScoreToMatch(m, score) {
   m.score_source = score.source;
   m.score_synced_at = new Date().toISOString();
   if (score.event_id) m.sportsdb_event_id = score.event_id;
+  if (score.source === 'fotmob') {
+    const homeLogo = fotmobLogoUrl(score.home_team_id);
+    const awayLogo = fotmobLogoUrl(score.away_team_id);
+    if (homeLogo && !m.home_logo) {
+      m.home_logo = homeLogo;
+      changed = true;
+    }
+    if (awayLogo && !m.away_logo) {
+      m.away_logo = awayLogo;
+      changed = true;
+    }
+  }
   return changed;
 }
 
@@ -362,6 +382,8 @@ function mirrorScore(store, sourceMatch) {
     s.score_source = sourceMatch.score_source;
     s.score_synced_at = sourceMatch.score_synced_at;
     if (sourceMatch.sportsdb_event_id) s.sportsdb_event_id = sourceMatch.sportsdb_event_id;
+    if (sourceMatch.home_logo && !s.home_logo) s.home_logo = sourceMatch.home_logo;
+    if (sourceMatch.away_logo && !s.away_logo) s.away_logo = sourceMatch.away_logo;
   }
 }
 

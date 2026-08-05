@@ -5,6 +5,7 @@ import {
   matchesNeedingScoreSync,
   scoreFromInplayEntry,
   scoreFromFotmobMatch,
+  fotmobLogoUrl,
 } from '../scripts/lib/live-score-sync.mjs';
 
 assert.equal(normalizeTeamKey('Palmeiras'), normalizeTeamKey('SE Palmeiras'));
@@ -71,14 +72,20 @@ assert.ok(normalizeTeamKey('Fortaleza EC').includes('fortaleza'));
   assert.equal(ht.period, 'ht');
   assert.equal(ht.minute, 45);
   assert.equal(ht.source, 'fotmob');
+  assert.equal(ht.home_team_id, null);
+  assert.equal(fotmobLogoUrl(207242), 'https://images.fotmob.com/image_resources/logo/teamlogo/207242_small.png');
+  assert.equal(fotmobLogoUrl(''), null);
+  assert.equal(fotmobLogoUrl('abc'), null);
 
   const live = scoreFromFotmobMatch({
-    home: { name: 'A', score: 0 },
-    away: { name: 'B', score: 0 },
+    home: { name: 'A', score: 0, id: 207242 },
+    away: { name: 'B', score: 0, id: 649424 },
     status: { started: true, finished: false, liveTime: { short: "62'" } },
   });
   assert.equal(live.minute, 62);
   assert.equal(live.period, null);
+  assert.equal(live.home_team_id, 207242);
+  assert.equal(live.away_team_id, 649424);
 
   const notStarted = scoreFromFotmobMatch({
     home: { name: 'A', score: 0 },
