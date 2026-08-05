@@ -613,6 +613,7 @@ async function handleApi(req, res, url) {
               away_team: ev.away_team,
               home_logo: ev.home_logo,
               away_logo: ev.away_logo,
+              league: ev.league || null,
               bet_team_side: stepFromCart?.bet_team_side || body.bet_team_side || hint.bet_team_side || 'away',
               odd_futgreen: Number(stepFromCart?.odd_futgreen ?? body.odd_futgreen ?? hint.odd_futgreen ?? 3.5),
               odd_casa: Number(stepFromCart?.odd_casa ?? body.odd_casa ?? hint.odd_casa ?? 1.5),

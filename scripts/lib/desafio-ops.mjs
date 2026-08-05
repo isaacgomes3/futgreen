@@ -61,6 +61,7 @@ export async function createDesafio(store, payload) {
       away_team: s.away_team,
       home_logo,
       away_logo,
+      league: s.league || null,
       bet_team_side: s.bet_team_side || 'home',
       odd_futgreen: Number(s.odd_futgreen || s.odd_arbishield || s.oddArbi),
       odd_casa: Number(s.odd_casa || s.oddCasa),

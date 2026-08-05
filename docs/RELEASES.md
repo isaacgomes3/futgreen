@@ -1,5 +1,10 @@
 # Releases ArbiShield
 
+## arbishield-1.3.1 (2026-08)
+
+- Fix: card do Desafio mostrava o nome dos times de novo na faixa onde o Proteger mostra o campeonato — passa a persistir `league` no step (vindo do evento BetBra) e exibir com o mesmo `shortLeagueName` do Proteger
+- Nota: placar ao vivo depende da cobertura do TheSportsDB por competição; torneios menos comuns (ex.: Leagues Cup) podem não estar indexados lá, mantendo 0-0/estimado mesmo com o sync rodando — isso é limite da fonte externa, não um bug de sincronização
+
 ## arbishield-1.3.0 (2026-08)
 
 - Fix: cards de Desafio agora exibem relógio (1º/2º tempo, intervalo, minuto) e placar ao vivo, igual ao Proteger
