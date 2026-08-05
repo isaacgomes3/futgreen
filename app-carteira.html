@@ -23,7 +23,7 @@
             <label>Destino
               <select name="dest">
                 <option value="apostador">Saldo Apostador</option>
-                <option value="desafio">Carteira Jornada</option>
+                <option value="desafio">Carteira Desafio</option>
                 <option value="provedor">Saldo Provedor</option>
               </select>
             </label>
@@ -46,7 +46,7 @@
           </div>
 
           <form id="transfer" class="fg-form fg-match">
-            <h3 style="margin:0;font-family:var(--font-display)">Reembolso → Jornada</h3>
+            <h3 style="margin:0;font-family:var(--font-display)">Reembolso → Desafio</h3>
             <label>Valor (R$) <input name="amount" type="number" min="1" step="0.01" required /></label>
             <button class="fg-btn" type="submit">Transferir</button>
           </form>
@@ -192,7 +192,7 @@
       const amount = Number(new FormData(e.target).get('amount'));
       try {
         await api('/api/futgreen/transfer-desafio', { method: 'POST', body: { amount } });
-        toast('Transferido para Carteira Jornada');
+        toast('Transferido para Carteira Desafio');
         location.reload();
       } catch (err) {
         toast(err.message);

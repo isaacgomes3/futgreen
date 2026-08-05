@@ -8,8 +8,8 @@
 - Health: `protectionRuntime=protection-runtime-stake-lock-v14`
 - Cliente cancela proteção própria só pré-kickoff
 - Buckets e labels (`Saldo Reembolso`, nunca “Saldo Dedução”)
-- Transferência Banca → Jornada (`desafio_balance_cents`) bloqueada (403)
-- Labels: Carteira Jornada (não “Desafio” na UI); Travado não é superfície de UI
+- Transferência Banca → Desafio (`desafio_balance_cents`) bloqueada (403)
+- Labels: Carteira Desafio (nome legado “Carteira Jornada” mantido como alias, rebrand ArbiShield 2026-08); Travado não é superfície de UI
 - Desafio ao vivo: cancelar/excluir → 403
 - `edit_only` em desafios preserva `is_active` / `published_at`
 - Empate Anula/DNB: não liquidar pelo ramo 1X2 `isDraw`

@@ -12,7 +12,7 @@
     <main class="fg-main">
       <section class="fg-section">
         <h2>Desafio ARBISHIELD</h2>
-        <p class="lead">Aposte na zebra com a odd ARBISHIELD · entrada sai da Carteira Jornada.</p>
+        <p class="lead">Indicações ArbiShield para vencer na BetBra · até 5 etapas · entrada sai da Carteira Desafio.</p>
         <div id="lock" class="fg-empty" hidden></div>
         <div id="grade" class="fg-grid fg-ind-grid"></div>
       </section>
@@ -24,7 +24,7 @@
     </main>
   </div>
 
-  <!-- Entrada / apostar na ARBISHIELD -->
+  <!-- Entrada na indicação ArbiShield -->
   <div id="entry-modal" class="fg-modal" hidden>
     <div class="fg-modal-backdrop" data-act="close"></div>
     <div class="fg-modal-panel" role="dialog" aria-modal="true" aria-labelledby="entry-modal-title">
@@ -33,7 +33,7 @@
       <p id="entry-modal-event" class="fg-meta"></p>
       <div class="fg-prot-locked">
         <div>
-          <span class="fg-meta" style="margin:0">Zebra</span>
+          <span class="fg-meta" style="margin:0">Indicação</span>
           <strong id="entry-modal-team">—</strong>
         </div>
         <div>
@@ -51,7 +51,7 @@
           <input name="stake" type="number" step="0.01" min="1" value="50" required autocomplete="off" />
         </label>
         <div id="entry-preview" class="fg-prot-preview"></div>
-        <button class="fg-btn" type="submit">Apostar na ARBISHIELD</button>
+        <button class="fg-btn" type="submit">Confirmar entrada</button>
       </form>
     </div>
   </div>
@@ -160,7 +160,7 @@
     }
 
     function resultLabel(step) {
-      if (step.result === 'zebra_protected') return 'Zebra venceu (ARBISHIELD)';
+      if (step.result === 'zebra_protected') return 'Indicação venceu (ARBISHIELD)';
       if (step.result === 'win') return 'Casa venceu';
       if (step.result === 'empate_anula') return 'Empate anula';
       return 'Liquidado';
@@ -189,11 +189,11 @@
           </div>
           <div class="fg-ind-list">
             <div class="fg-ind-list-head-row">
-              <div class="fg-ind-list-head">Zebra: ${shortTeamName(zebraTeam)} · mercado ${step.market_flag || 'dnb'}</div>
+              <div class="fg-ind-list-head">Indicação: ${shortTeamName(zebraTeam)} · mercado ${step.market_flag || 'dnb'}</div>
             </div>
             <div class="fg-ind-mkt-row">
               <button type="button" class="fg-ind-mkt${!canEnter ? ' is-locked' : ''}" data-act="enter"
-                ${!canEnter ? `disabled title="${closed ? 'Partida iniciada — entrada encerrada' : 'Deposite na Carteira Jornada para entrar'}"` : ''}>
+                ${!canEnter ? `disabled title="${closed ? 'Partida iniciada — entrada encerrada' : 'Deposite na Carteira Desafio para entrar'}"` : ''}>
                 <span class="fg-ind-mkt-line">
                   <span class="fg-ind-mkt-main">
                     <strong>ARBISHIELD</strong>
@@ -269,18 +269,18 @@
       const prev = previewSinal(step, stakeReais);
       el.innerHTML = `
         <div class="fg-prot-preview-grid">
-          <div><span>Se a zebra vencer</span><strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong></div>
+          <div><span>Se a indicação vencer</span><strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong></div>
         </div>
         <p class="fg-meta" style="margin:0.45rem 0 0">
-          Se a zebra não vencer (Casa ou Empate Anula): sem crédito adicional — stake permanece com a plataforma
-          exceto Empate Anula, que estorna integralmente na Carteira Jornada.
+          Se a indicação não vencer (Casa ou Empate Anula): sem crédito adicional — stake permanece com a plataforma
+          exceto Empate Anula, que estorna integralmente na Carteira Desafio.
         </p>`;
     }
 
     function openEntryModal(desafio, step) {
       if (me.impersonating) return toast('Espelho: Desafio é readonly');
       if (stepClosed(step)) return toast('Partida já iniciada — entrada encerrada');
-      if (!unlockedWallet) return toast('Deposite na Carteira Jornada para entrar');
+      if (!unlockedWallet) return toast('Deposite na Carteira Desafio para entrar');
       current = { desafio, step };
       const zebraTeam = step.bet_team_side === 'away' ? step.away_team : step.home_team;
       document.getElementById('entry-modal-event').textContent =
@@ -330,14 +330,14 @@
     };
 
     async function load() {
-      // preview=1: mostra a vitrine de desafios publicados mesmo com a Carteira Jornada vazia;
+      // preview=1: mostra a vitrine de desafios publicados mesmo com a Carteira Desafio vazia;
       // a entrada (aposta) continua bloqueada até o depósito, via unlocked.
       const data = await api('/api/futgreen/desafios?preview=1');
       unlockedWallet = Boolean(data.unlocked);
 
       if (!unlockedWallet) {
         lock.hidden = false;
-        lock.innerHTML = `Carteira Jornada vazia — você pode ver os desafios, mas precisa depositar para entrar. <a href="/app-carteira.html">Ir à Carteira</a>`;
+        lock.innerHTML = `Carteira Desafio vazia — você pode ver os desafios, mas precisa depositar para entrar. <a href="/app-carteira.html">Ir à Carteira</a>`;
       } else {
         lock.hidden = true;
       }

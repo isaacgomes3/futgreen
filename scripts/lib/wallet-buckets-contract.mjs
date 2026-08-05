@@ -1,12 +1,13 @@
 /**
- * wallet-buckets-contract-v2
+ * wallet-buckets-contract-v3
  * Labels oficiais da UI ↔ colunas de profiles
  * Nunca exibir "Saldo Dedução" — nome oficial é Saldo Reembolso.
- * Carteira do produto Desafio = Carteira Jornada (coluna desafio_balance_cents).
+ * Carteira do produto Desafio = Carteira Desafio (coluna desafio_balance_cents).
+ * "Jornada" é o nome legado (rebrand ArbiShield), mantido como alias.
  * Saldo Travado existe no modelo, mas não é superfície de UI (entrada sem trava).
  */
 
-export const WALLET_BUCKETS_VERSION = 'wallet-buckets-contract-v2';
+export const WALLET_BUCKETS_VERSION = 'wallet-buckets-contract-v3';
 
 export const BUCKETS = Object.freeze({
   balance_cents: {
@@ -32,9 +33,9 @@ export const BUCKETS = Object.freeze({
   },
   desafio_balance_cents: {
     column: 'desafio_balance_cents',
-    label: 'Carteira Jornada',
-    shortLabel: 'Jornada',
-    aliases: ['Carteira Desafio', 'Desafio'],
+    label: 'Carteira Desafio',
+    shortLabel: 'Desafio',
+    aliases: ['Carteira Jornada', 'Jornada'],
     uiVisible: true,
   },
   investor_balance_cents: {
@@ -61,7 +62,7 @@ export const TX_TYPES = Object.freeze({
   protection_refund: 'Estorno',
   protection_unlock: 'Liberação',
   protection_release: 'Liberação',
-  desafio_deposit: 'Depósito Jornada',
+  desafio_deposit: 'Depósito Desafio',
   desafio_cancel_refund: 'Estorno (cancelado)',
   desafio_void_refund: 'Estorno Empate Anula',
   desafio_forfeit_to_provider: 'Forfeit → Provedor',
@@ -71,7 +72,7 @@ export const TX_TYPES = Object.freeze({
   admin_adjustment_debit: 'Ajuste manual (débito)',
   provider_deposit: 'Crédito Provedor',
   manual_deposit: 'Depósito manual',
-  transfer_reembolso_to_desafio: 'Reembolso → Jornada',
+  transfer_reembolso_to_desafio: 'Reembolso → Desafio',
   deduction_withdraw: 'Saque Saldo Reembolso',
   deduction_withdraw_hold: 'Saque Reembolso (reserva)',
   deduction_withdraw_paid: 'Saque Reembolso (pago)',
@@ -87,10 +88,10 @@ export function isTransferAllowed(from, to) {
   return ALLOWED_TRANSFERS.some((t) => t.from === from && t.to === to);
 }
 
-/** Banca (Apostador) → Jornada é bloqueada */
+/** Banca (Apostador) → Desafio é bloqueada */
 export function assertTransferAllowed(from, to) {
   if (from === 'balance_cents' && to === 'desafio_balance_cents') {
-    const err = new Error('Transferência Banca → Jornada bloqueada');
+    const err = new Error('Transferência Banca → Desafio bloqueada');
     err.status = 403;
     err.code = 'TRANSFER_BLOCKED';
     throw err;

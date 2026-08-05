@@ -4,7 +4,7 @@ import { api, brl, fmtWhen } from './api.js';
 export const BUCKET_LABELS = {
   balance_cents: 'Saldo Apostador',
   deduction_balance_cents: 'Saldo Reembolso',
-  desafio_balance_cents: 'Carteira Jornada',
+  desafio_balance_cents: 'Carteira Desafio',
   investor_balance_cents: 'Saldo Provedor',
   demo_balance_cents: 'Demo',
 };

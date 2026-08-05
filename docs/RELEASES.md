@@ -1,5 +1,11 @@
 # Releases ArbiShield
 
+## arbishield-1.2.0 (2026-08)
+
+- Wallet-buckets-contract v3: label oficial da carteira do Desafio passa de "Carteira Jornada" para "Carteira Desafio" (`Jornada` mantido como alias legado)
+- Copy do Desafio revista: remove framing de "aposta na zebra" (o Desafio não é uma aposta direta do usuário, é uma indicação ArbiShield para vencer na BetBra, em até 5 etapas)
+- Pedido explícito do dono — ver `docs/SYSTEM_NON_REGRESSION.md`
+
 ## arbishield-1.1.0 (2026-08)
 
 - Rebrand visual completo: FutGreen → ArbiShield (nome, wordmark, logo/favicon/avatar em `public/brand/`, títulos e textos de todas as telas)

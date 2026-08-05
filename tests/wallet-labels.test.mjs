@@ -14,10 +14,11 @@ test('nome oficial é Saldo Reembolso — nunca Saldo Dedução', () => {
   assert.ok(!JSON.stringify(BUCKETS).includes('Saldo Dedução'));
 });
 
-test('Desafio renomeado para Jornada; Travado fora da UI', () => {
-  assert.equal(WALLET_BUCKETS_VERSION, 'wallet-buckets-contract-v2');
-  assert.equal(labelForBucket('desafio_balance_cents'), 'Carteira Jornada');
-  assert.equal(shortLabelForBucket('desafio_balance_cents'), 'Jornada');
+test('Desafio renomeado para Carteira Desafio; Travado fora da UI', () => {
+  assert.equal(WALLET_BUCKETS_VERSION, 'wallet-buckets-contract-v3');
+  assert.equal(labelForBucket('desafio_balance_cents'), 'Carteira Desafio');
+  assert.equal(shortLabelForBucket('desafio_balance_cents'), 'Desafio');
+  assert.ok(BUCKETS.desafio_balance_cents.aliases.includes('Carteira Jornada'));
   assert.equal(BUCKETS.locked_balance_cents.uiVisible, false);
   assert.ok(!uiVisibleBucketKeys().includes('locked_balance_cents'));
   assert.ok(uiVisibleBucketKeys().includes('desafio_balance_cents'));

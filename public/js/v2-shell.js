@@ -182,7 +182,7 @@ export async function mountShell({ admin = false } = {}) {
         depositOnly
           ? ''
           : `<div class="fg-bal"><small>Reembolso</small><strong>${brl(w.deduction_balance_cents)}</strong></div>
-      <div class="fg-bal"><small>Jornada</small><strong>${brl(w.desafio_balance_cents)}</strong></div>`
+      <div class="fg-bal"><small>Desafio</small><strong>${brl(w.desafio_balance_cents)}</strong></div>`
       }
     </div>
     <div class="fg-top-actions">
