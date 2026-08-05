@@ -237,6 +237,32 @@ async function ensureStepsLogos(steps) {
   return changed;
 }
 
+/** Anexa fase/relógio/placar ao vivo (mesmo cálculo dos matches de Proteger) aos steps de Desafio. */
+function enrichStepsLiveState(bundles) {
+  const now = Date.now();
+  let changed = false;
+  for (const b of bundles || []) {
+    if (!b?.steps) continue;
+    b.steps = b.steps.map((step) => {
+      if (!step || step.status === 'done') return step;
+      const touched = touchMatchLiveState(step, now);
+      if (touched.changed) changed = true;
+      return {
+        ...step,
+        match_phase: touched.phase.phase,
+        match_clock: touched.phase.clock,
+        match_badge: touched.phase.badge,
+        match_live: touched.phase.live,
+        match_finished: touched.phase.finished,
+        display_home_score: touched.phase.home_score,
+        display_away_score: touched.phase.away_score,
+      };
+    });
+  }
+  if (changed) store.save();
+  return changed;
+}
+
 function normalizeApiPath(urlPath) {
   return urlPath
     .replace(/^\/api\/arbishield\//, '/api/futgreen/')
@@ -832,10 +858,12 @@ async function handleApi(req, res, url) {
       requireAdmin(ctx);
       const list = store.data.desafios.filter((d) => !d.deleted_at).map((d) => getDesafioBundle(store, d.id));
       for (const b of list) await ensureStepsLogos(b?.steps);
+      enrichStepsLiveState(list);
       return send(res, 200, { desafios: list });
     }
     const published = listPublishedDesafios(store).map((d) => getDesafioBundle(store, d.id));
     for (const b of published) await ensureStepsLogos(b?.steps);
+    enrichStepsLiveState(published);
     const unlocked = (ctx.user.wallet.desafio_balance_cents || 0) > 0;
     // preview=1: Visão Geral / discovery — lista publicados mesmo com carteira travada
     const preview = url.searchParams.get('preview') === '1';

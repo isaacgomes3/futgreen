@@ -1,6 +1,7 @@
 /**
  * Sync automático de placar (TheSportsDB).
- * Atualiza home/away/minute/finished nos matches ao vivo — não liquida proteção.
+ * Atualiza home/away/minute/finished nos matches (Proteger) e nos steps de Desafio
+ * ao vivo — nunca liquida proteção nem step (settle continua manual/admin).
  */
 
 const SPORTSDB = 'https://www.thesportsdb.com/api/v1/json';
@@ -197,9 +198,14 @@ function applyScoreToMatch(m, score) {
   return changed;
 }
 
+/** Todos os registros sincronizáveis (matches de Proteger + steps de Desafio). */
+function allSyncableRecords(store) {
+  return [...store.data.matches, ...(store.data.desafio_steps || [])];
+}
+
 function mirrorScore(store, sourceMatch) {
-  for (const s of store.data.matches) {
-    if (s.id === sourceMatch.id) continue;
+  for (const s of allSyncableRecords(store)) {
+    if (s === sourceMatch) continue;
     const same =
       (sourceMatch.external_id && s.external_id === sourceMatch.external_id) ||
       (s.home_team === sourceMatch.home_team &&
@@ -232,6 +238,19 @@ export function matchesNeedingScoreSync(store, now = Date.now()) {
   });
 }
 
+/** Steps de Desafio elegíveis: publicados, já iniciados, ainda não liquidados (settle manual). */
+export function stepsNeedingScoreSync(store, now = Date.now()) {
+  return (store.data.desafio_steps || []).filter((s) => {
+    if (s.deleted_at) return false;
+    if (s.status === 'done') return false;
+    if (s.status !== 'published' && s.status !== 'live') return false;
+    const starts = new Date(s.starts_at || 0).getTime();
+    if (!Number.isFinite(starts) || starts > now + 5 * 60e3) return false;
+    if (now - starts > 8 * 3600e3) return false;
+    return true;
+  });
+}
+
 /**
  * Sincroniza placares. Throttle global (exceto force).
  * @returns {{ updated: number, checked: number, skipped: boolean }}
@@ -245,7 +264,7 @@ export async function syncLiveScores(store, { force = false } = {}) {
   syncInFlight = (async () => {
     lastGlobalSync = Date.now();
     const now = Date.now();
-    const candidates = matchesNeedingScoreSync(store, now);
+    const candidates = [...matchesNeedingScoreSync(store, now), ...stepsNeedingScoreSync(store, now)];
     if (!candidates.length) return { updated: 0, checked: 0, skipped: false };
 
     // Um fetch por grupo de evento

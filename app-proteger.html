@@ -317,7 +317,8 @@
       return `
         <div class="fg-ind-team">
           <div class="fg-ind-team-main">
-            ${logo ? `<img src="${logo}" alt="" width="28" height="28" />` : ''}
+            <img src="${logo || '/public/assets/casa-default.svg'}" alt="" width="28" height="28"
+              onerror="this.onerror=null;this.src='/public/assets/casa-default.svg'" />
             <strong title="${name}">${shortTeamName(name)}</strong>
           </div>
           ${scoreHtml}

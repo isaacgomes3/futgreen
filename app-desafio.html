@@ -137,14 +137,40 @@
       return step.status === 'live' || step.status === 'done' || kickoffPassed(step.starts_at);
     }
 
+    function isStepLive(step) {
+      return Boolean(
+        step.match_live ||
+          step.match_finished ||
+          step.match_phase === 'finished' ||
+          step.match_phase === '1h' ||
+          step.match_phase === '2h' ||
+          step.match_phase === 'ht' ||
+          step.match_phase === 'live',
+      );
+    }
+
     function statusBadgeHtml(step) {
       if (step.status === 'done') {
         return `<span class="fg-ind-when fg-ind-when-ft">Encerrado</span>`;
       }
-      if (stepClosed(step)) {
+      if (isStepLive(step) || stepClosed(step)) {
         return `<span class="fg-ind-when fg-ind-when-live"><span class="fg-ind-live-dot" aria-hidden="true"></span>Ao vivo</span>`;
       }
       return `<span class="fg-ind-when">${fmtKickBadge(step.starts_at)}</span>`;
+    }
+
+    function matchClockHtml(step) {
+      if (step.status === 'done') {
+        return `<div class="fg-ind-clock">Encerrado · placar final</div>`;
+      }
+      if (!isStepLive(step) && !stepClosed(step)) return '';
+      if (step.match_finished || step.match_phase === 'finished') {
+        return `<div class="fg-ind-clock">Encerrado · placar final</div>`;
+      }
+      const clock = step.match_phase === 'ht' ? 'Intervalo' : (step.match_clock || "1'");
+      const badge = step.match_phase === 'ht' ? '' : (step.match_badge || '');
+      const label = badge && clock !== badge ? `${clock} · ${badge}` : clock;
+      return `<div class="fg-ind-clock"><span class="fg-ind-live-dot" aria-hidden="true"></span>${label}</div>`;
     }
 
     function teamRowHtml(name, logo, score) {
@@ -152,7 +178,8 @@
       return `
         <div class="fg-ind-team">
           <div class="fg-ind-team-main">
-            ${logo ? `<img src="${logo}" alt="" width="30" height="30" />` : ''}
+            <img src="${logo || '/public/assets/casa-default.svg'}" alt="" width="30" height="30"
+              onerror="this.onerror=null;this.src='/public/assets/casa-default.svg'" />
             <strong title="${name}">${shortTeamName(name)}</strong>
           </div>
           ${scoreHtml}
@@ -184,9 +211,10 @@
             <span class="fg-ind-league" title="${desafio.title}">${desafio.title}</span>
           </div>
           <div class="fg-ind-teams">
-            ${teamRowHtml(step.home_team, step.home_logo, step.status === 'done' ? step.home_score ?? null : null)}
-            ${teamRowHtml(step.away_team, step.away_logo, step.status === 'done' ? step.away_score ?? null : null)}
+            ${teamRowHtml(step.home_team, step.home_logo, step.status === 'done' ? (step.home_score ?? 0) : (isStepLive(step) ? (step.display_home_score ?? step.home_score ?? 0) : null))}
+            ${teamRowHtml(step.away_team, step.away_logo, step.status === 'done' ? (step.away_score ?? 0) : (isStepLive(step) ? (step.display_away_score ?? step.away_score ?? 0) : null))}
           </div>
+          ${matchClockHtml(step)}
           <div class="fg-ind-list">
             <div class="fg-ind-list-head-row">
               <div class="fg-ind-list-head">Indicação: ${shortTeamName(zebraTeam)} · mercado ${step.market_flag || 'dnb'}</div>
