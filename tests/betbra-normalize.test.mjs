@@ -12,6 +12,7 @@ import {
   resolveCartSelections,
   desafioFieldsFromSelections,
 } from '../scripts/lib/betbra-client.mjs';
+import { computeSurebetOddArbi } from '../scripts/lib/desafio-ciclo-math.mjs';
 
 const sample = {
   id: 'ev1',
@@ -95,11 +96,11 @@ test('extractMatchOdds', () => {
   assert.equal(o.runners[0].back_odd, 2.1);
 });
 
-test('normalizePreliveEvent sugere zebra no underdog', () => {
+test('normalizePreliveEvent sugere zebra no underdog e calcula odd surebet (5% lucro) a partir da odd_casa', () => {
   const ev = normalizePreliveEvent(sample);
   assert.equal(ev.external_id, 'ev1');
   assert.equal(ev.desafio_hint.bet_team_side, 'away');
-  assert.equal(ev.desafio_hint.odd_futgreen, 3.6);
+  assert.equal(ev.desafio_hint.odd_futgreen, computeSurebetOddArbi({ oddCasa: 2.1 }));
   assert.equal(ev.desafio_hint.odd_casa, 2.1);
 });
 
@@ -170,7 +171,7 @@ test('desafioFieldsFromSelections monta o card a partir do carrinho (zebra = mai
     resolved,
   );
   assert.equal(fields.bet_team_side, 'away');
-  assert.equal(fields.odd_futgreen, 3.4);
+  assert.equal(fields.odd_futgreen, computeSurebetOddArbi({ oddCasa: 2.1 }));
   assert.equal(fields.odd_casa, 2.1);
   assert.equal(fields.liquidity, 4000);
 });

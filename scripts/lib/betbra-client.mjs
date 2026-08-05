@@ -3,6 +3,18 @@
  * Base: tips3x3/src/lib/betbra
  */
 
+import { computeSurebetOddArbi } from './desafio-ciclo-math.mjs';
+
+/** odd_futgreen-surebet-v1: gera odd ARBISHIELD a partir da odd_casa real, com fallback para a odd bruta da zebra */
+function surebetOddOrFallback(oddCasa, fallbackOdd) {
+  try {
+    if (Number(oddCasa) > 1) return computeSurebetOddArbi({ oddCasa });
+  } catch {
+    // segue para fallback
+  }
+  return fallbackOdd;
+}
+
 export const BETBRA = {
   origin: 'https://betbra.bet.br',
   mexchangeWeb: 'https://mexchange.betbra.bet.br',
@@ -328,10 +340,11 @@ export function desafioFieldsFromSelections(eventBase, resolved) {
     const zebraSel = zebraIsAway ? awaySel : homeSel;
     const favSel = zebraIsAway ? homeSel : awaySel;
     const liq = zebraSel.selection.liquidity ?? favSel.selection.liquidity;
+    const oddCasa = Number(favSel.selection.odd);
     return {
       bet_team_side: zebraIsAway ? 'away' : 'home',
-      odd_futgreen: zebraSel.selection.odd,
-      odd_casa: favSel.selection.odd,
+      odd_futgreen: surebetOddOrFallback(oddCasa, zebraSel.selection.odd),
+      odd_casa: oddCasa,
       ...(liq != null ? { liquidity: liq } : {}),
     };
   }
@@ -381,7 +394,7 @@ export function normalizePreliveEvent(ev) {
     },
     desafio_hint: {
       bet_team_side: zebraSide,
-      odd_futgreen: zebra?.lay_odd || zebra?.back_odd || null,
+      odd_futgreen: surebetOddOrFallback(favorito?.back_odd, zebra?.lay_odd || zebra?.back_odd || null),
       odd_casa: favorito?.back_odd || null,
       liquidity: Math.round(zebra?.lay_liq || zebra?.volume || odds.volume || 0),
     },

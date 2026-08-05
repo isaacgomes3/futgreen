@@ -466,9 +466,11 @@ export async function syncLiveScores(store, { force = false } = {}) {
   }
 }
 
-export function startLiveScoreScheduler(store, { intervalMs = 45_000 } = {}) {
+export function startLiveScoreScheduler(store, { intervalMs = 45_000, onAfterSync } = {}) {
   const tick = () => {
-    syncLiveScores(store).catch(() => {});
+    syncLiveScores(store)
+      .then(() => onAfterSync?.())
+      .catch(() => {});
   };
   tick();
   return setInterval(tick, intervalMs);

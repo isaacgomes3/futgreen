@@ -22,8 +22,8 @@
           <label>Time zebra
             <select name="bet_team_side"><option value="home">Casa</option><option value="away" selected>Visitante</option></select>
           </label>
-          <label>Odd ARBISHIELD <input name="odd_futgreen" type="number" step="0.01" value="3.40" required /></label>
-          <label>Odd Casa <input name="odd_casa" type="number" step="0.01" value="1.55" required /></label>
+          <label>Odd Casa (BetBra) <input name="odd_casa" id="odd_casa" type="number" step="0.01" value="1.55" required /></label>
+          <label>Odd ARBISHIELD (surebet 5% · auto) <input name="odd_futgreen" id="odd_futgreen" type="number" step="0.01" value="" required /></label>
           <label>Liquidez (R$) <input name="liquidity" type="number" value="5000" /></label>
           <label>Kickoff <input name="starts_at" type="datetime-local" required /></label>
           <button class="fg-btn" type="submit">Criar rascunho</button>
@@ -36,7 +36,17 @@
     import { mountShell } from '/public/js/v2-shell.js';
     import { api, toast, fmtWhen } from '/public/js/api.js';
     import { mountBetbraRadar, bindTeamSearch } from '/public/js/admin-radar.js?v=stack1';
+    import { computeSurebetOddArbi } from '/public/js/desafio-ciclo-math.js';
     await mountShell({ admin: true });
+
+    const oddCasaInput = document.getElementById('odd_casa');
+    const oddFutgreenInput = document.getElementById('odd_futgreen');
+    function recalcOddFutgreen() {
+      const odd = computeSurebetOddArbi({ oddCasa: Number(oddCasaInput.value) });
+      if (odd) oddFutgreenInput.value = odd.toFixed(2);
+    }
+    oddCasaInput.addEventListener('input', recalcOddFutgreen);
+    recalcOddFutgreen();
 
     bindTeamSearch(document.getElementById('home_team'), {
       onPick: (t) => {
@@ -162,10 +172,10 @@
                 away_team: fd.get('away_team'),
                 home_logo: fd.get('home_logo') || null,
                 away_logo: fd.get('away_logo') || null,
-                bet_team_side: 'away',
-                odd_futgreen: 3.40,
-                odd_casa: 1.55,
-                liquidity: 0,
+                bet_team_side: fd.get('bet_team_side') || 'away',
+                odd_futgreen: Number(fd.get('odd_futgreen')),
+                odd_casa: Number(fd.get('odd_casa')),
+                liquidity: Number(fd.get('liquidity')) || 0,
                 starts_at: starts,
                 market_flag: 'dnb',
                 casa_name: 'Casa',
@@ -175,6 +185,7 @@
         });
         toast('Desafio criado');
         e.target.reset();
+        recalcOddFutgreen();
         await load();
       } catch (err) {
         toast(err.message);

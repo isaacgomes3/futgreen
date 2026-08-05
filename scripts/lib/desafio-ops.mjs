@@ -1,5 +1,9 @@
 import { MAX_ENTRIES_PER_CYCLE, zebraPayoutCents, resolveDesafioMarketResult } from './desafio-ciclo-math.mjs';
-import { assertCanCancelOrDeleteDesafio, editDesafioPreservesPublication } from './admin-ops-contract.mjs';
+import {
+  assertCanCancelOrDeleteDesafio,
+  editDesafioPreservesPublication,
+  BLOCK_CANCEL_DELETE_ANDAMENTO,
+} from './admin-ops-contract.mjs';
 import { resolveTeamLogo } from './football-teams.mjs';
 
 export function listPublishedDesafios(store) {
@@ -107,6 +111,10 @@ export function registerDesafioEntry(store, { userId, desafioId, stepId, stakeCe
   const bundle = getDesafioBundle(store, desafioId);
   if (!bundle || !bundle.desafio.is_published) {
     throw Object.assign(new Error('Desafio não disponível'), { status: 400 });
+  }
+
+  if (bundle.desafio.is_suspended) {
+    throw Object.assign(new Error('Evento suspenso — novas entradas bloqueadas'), { status: 400, code: 'EVENT_SUSPENDED' });
   }
 
   const step = bundle.steps.find((s) => s.id === stepId);
@@ -268,7 +276,23 @@ export function cancelDesafio(store, { desafioId, email, participationId }) {
   if (!bundle) throw Object.assign(new Error('Desafio não encontrado'), { status: 404 });
 
   const liveStep = bundle.steps.find((s) => s.status === 'live');
-  assertCanCancelOrDeleteDesafio({ stepStatus: liveStep ? 'live' : 'published', email });
+  try {
+    assertCanCancelOrDeleteDesafio({ stepStatus: liveStep ? 'live' : 'published', email });
+  } catch (e) {
+    if (e.code === BLOCK_CANCEL_DELETE_ANDAMENTO) {
+      // desafio-evento-suspenso-v1: por segurança, o admin nunca cancela evento em
+      // andamento (protege quem já está participando). Suspende novas entradas e
+      // avisa "Evento suspenso" em vez de derrubar o card com estorno.
+      bundle.desafio.is_suspended = true;
+      bundle.desafio.suspended_at = new Date().toISOString();
+      store.save();
+      throw Object.assign(
+        new Error('Evento suspenso — partida em andamento. Proteção mantida para quem já está participando; novas entradas bloqueadas.'),
+        { status: 403, code: 'EVENT_SUSPENDED' },
+      );
+    }
+    throw e;
+  }
 
   for (const part of store.data.desafio_participations.filter(
     (p) => p.desafio_id === desafioId && p.status === 'pending',
@@ -300,8 +324,57 @@ export function softDeleteDesafio(store, { desafioId, email, force = false, conf
   }
   const steps = store.data.desafio_steps.filter((s) => s.desafio_id === desafioId);
   const live = steps.find((s) => s.status === 'live');
-  assertCanCancelOrDeleteDesafio({ stepStatus: live ? 'live' : 'draft', email, force });
+  try {
+    assertCanCancelOrDeleteDesafio({ stepStatus: live ? 'live' : 'draft', email, force });
+  } catch (e) {
+    if (e.code === BLOCK_CANCEL_DELETE_ANDAMENTO) {
+      d.is_suspended = true;
+      d.suspended_at = new Date().toISOString();
+      store.save();
+      throw Object.assign(
+        new Error('Evento suspenso — partida em andamento. Exclusão bloqueada; novas entradas bloqueadas.'),
+        { status: 403, code: 'EVENT_SUSPENDED' },
+      );
+    }
+    throw e;
+  }
   d.deleted_at = new Date().toISOString();
   store.save();
   return d;
+}
+
+/**
+ * Cliente cancela a própria participação pendente — só antes do kickoff da etapa.
+ * Mesmo efeito de cancelamento admin por participationId: estorna stake integral.
+ */
+export function cancelDesafioEntryByClient(store, { participationId, userId, now = new Date() }) {
+  const part = store.data.desafio_participations.find((p) => p.id === participationId);
+  if (!part) throw Object.assign(new Error('Participação não encontrada'), { status: 404 });
+  if (part.user_id !== userId) {
+    throw Object.assign(new Error('Participação de outro usuário'), { status: 403, code: 'NOT_OWNER' });
+  }
+  if (part.status !== 'pending') {
+    throw Object.assign(new Error('Participação não cancelável'), { status: 400 });
+  }
+  const step = store.data.desafio_steps.find((s) => s.id === part.step_id);
+  if (!step) throw Object.assign(new Error('Etapa não encontrada'), { status: 404 });
+  if (now.getTime() >= new Date(step.starts_at).getTime() || step.status === 'live' || step.status === 'done') {
+    throw Object.assign(new Error('Cancelamento só antes do início da partida'), {
+      status: 400,
+      code: 'PRE_KICKOFF',
+    });
+  }
+  const user = store.getUser(part.user_id);
+  user.wallet.desafio_balance_cents = (user.wallet.desafio_balance_cents || 0) + part.stake_cents;
+  part.status = 'cancelled';
+  store.addTx({
+    user_id: user.id,
+    type: 'desafio_cancel_refund',
+    amount_cents: part.stake_cents,
+    bucket: 'desafio_balance_cents',
+    ref_id: part.id,
+    meta: { note: 'client_cancel_pre_kickoff' },
+  });
+  store.save();
+  return { cancelled: part };
 }

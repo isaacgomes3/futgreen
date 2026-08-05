@@ -1,5 +1,26 @@
 # Releases ArbiShield
 
+## arbishield-1.6.0 (2026-08)
+
+- **Pedido explícito do dono** — liquidação automática de Proteção e Desafio + cancelamento/suspensão de evento, ver `docs/SYSTEM_NON_REGRESSION.md` e `docs/FUNCIONAMENTO_DESAFIO_E_PROTECAO.md` §2.3a/§2.3b/§3.3b/§3.4:
+  - **Liquidação automática (`auto-settle-v1`)**: quando o placar vem confirmado por fonte externa (`score_source` + `finished_at` + placar numérico), Proteção e Desafio liquidam sozinhos, reaproveitando 100% `settleProtection`/`settleDesafioStep` (nenhuma regra financeira nova). Mercado não reconhecido (novo `scripts/lib/auto-settle.mjs`: 1X2/vencedor, DNB/Empate Anula, Total de gols Mais/Menos) **nunca é adivinhado** — fica para o admin liquidar manualmente. Roda no scheduler de placar (45s), no sync manual/força e no `GET /api/futgreen/matches`
+  - **Edição/liquidação manual do admin preservada 100%** — corre em paralelo com segurança (guards de idempotência já existentes: `p.status !== 'active'` / `step.status === 'done'`)
+  - **Evento suspenso (`desafio-evento-suspenso-v1` / `protecao-evento-suspenso-v1`)**: admin **nunca** cancela/exclui evento (Desafio ou Proteção) com etapa/partida em andamento, mesmo Isaac/Carlos — bloqueia e marca `is_suspended`/`suspended` ("Evento suspenso"), impedindo só novas entradas e preservando quem já está participando. Cancelamento com estorno continua permitido antes do kickoff
+  - Novo endpoint `POST /api/futgreen/match-cancel` (Proteção) + botão "Cancelar evento" em `admin-jogos.html`
+  - **Cancelamento de entrada pelo cliente no Desafio** (novidade — só existia para Proteção): botão "Cancelar entrada" no card antes do kickoff (`app-desafio.html` → novo endpoint `POST /api/futgreen/desafio-entry-cancel`, função `cancelDesafioEntryByClient`)
+  - Novos testes: `tests/auto-settle.test.mjs`, `tests/event-suspend-cancel.test.mjs`
+
+## arbishield-1.5.0 (2026-08)
+
+- **Pedido explícito do dono** — corrige o cálculo da odd ARBISHIELD no Desafio (`odd_futgreen-surebet-v1`), ver `docs/SYSTEM_NON_REGRESSION.md` e `docs/FUNCIONAMENTO_DESAFIO_E_PROTECAO.md` §3.3a:
+  - `odd_futgreen` agora é **calculada por padrão** a partir da `odd_casa` real (BetBra) via surebet clássico `1/oddArbi + 1/oddCasa = 1 - 5%`, garantindo ~5% de lucro em ambos os resultados (antes: copiava a odd bruta da zebra da BetBra, sem margem garantida)
+  - Nova função `computeSurebetOddArbi` em `scripts/lib/desafio-ciclo-math.mjs` (espelho `public/js/desafio-ciclo-math.js`)
+  - Aplicada no carrinho da BetBra (`desafioFieldsFromSelections`, `normalizePreliveEvent`) e no formulário manual (`admin-desafios.html`, campo auto-calculado a partir da Odd Casa, editável)
+  - Corrigido bug no formulário manual do admin que ignorava os valores digitados pelo admin (sempre criava com odd fixa 3.40/1.55)
+  - `suggestedHouseStake` corrigida (antes tinha um buffer de margem sempre zerado `* (1 + targetProfit * 0)`) — agora calcula o stake equivalente na BetBra via dutching (mesmo retorno bruto nos dois lados)
+  - Card do cliente (`app-desafio.html`): ao digitar a stake, o preview mostra também o valor equivalente a apostar na BetBra, igual ao exemplo visual (entrada ARBISHIELD × odd = retorno; stake BetBra × odd_casa = mesmo retorno)
+  - Novos testes: `computeSurebetOddArbi` (odd_casa 1.72 → ~2.70) e verificação de margem de lucro ~5% no dutching (`tests/desafio-market-flag.test.mjs`); testes de `betbra-normalize.test.mjs` atualizados para a nova regra
+
 ## arbishield-1.4.0 (2026-08)
 
 - **Pedido explícito do dono** — inverte a regra de crédito da liquidação do Desafio (`desafio-indicacao-settle-v1`), ver `docs/SYSTEM_NON_REGRESSION.md`:

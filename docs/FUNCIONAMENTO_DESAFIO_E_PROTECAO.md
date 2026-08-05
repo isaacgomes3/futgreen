@@ -61,6 +61,29 @@ Vocabulário da UI: **Reembolso** · **Ganho** · **Anula**.
 **Entrada (v13):** não trava stake. **Economia no GANHO:** BACK = `stake×(odd−1)` · LAY = `liability/(odd−1)`.  
 Cliente **1% da stake/responsabilidade** · BetBra **2,5% do lucro bruto** · ArbiShield = bruto − cliente − taxa — sem débito no Apostador.
 
+### 2.3a Liquidação automática — `auto-settle-v1`
+
+Quando o placar vem **confirmado por fonte externa** (`score_source` presente + `finished_at` +
+placar numérico — BetBra in-play, FotMob ou TheSportsDB), o sistema liquida a Proteção sozinho,
+decidindo REEMBOLSO/GANHO/ANULA a partir do mercado (`market_name`/`selection_name`/`side`) do
+próprio jogo publicado: 1X2/vencedor, DNB (empate anula) e Total de gols Mais/Menos.
+**Mercado não reconhecido nunca é adivinhado** — fica para o admin liquidar manualmente
+(`scripts/lib/auto-settle.mjs`: `resolveProtectionOutcome`/`evaluateSelectionOutcome`). Roda a cada
+sync de placar (scheduler 45s, sync manual e no `GET /api/futgreen/matches`). Reaproveita
+`settleProtection` — sem regra financeira nova, e o admin continua podendo liquidar manualmente a
+qualquer momento (idempotente: corrida resolvida pelo guard `p.status !== 'active'`).
+
+### 2.3b Cancelamento e "Evento suspenso" — `protecao-evento-suspenso-v1`
+
+- Cliente pode **cancelar a própria proteção ativa** só **antes do kickoff** (`app-protecoes.html` →
+  `POST /api/futgreen/protections/cancel`) — sem P&L.
+- Admin pode **cancelar o evento inteiro** (`POST /api/futgreen/match-cancel`, botão "Cancelar
+  evento" em `admin-jogos.html`) — mas **nunca** se a partida já está em andamento: por segurança,
+  para não prejudicar quem já está protegido, o cancelamento é bloqueado e o evento é marcado
+  `suspended` ("Evento suspenso"), bloqueando só **novas** proteções; quem já está ativo continua
+  normalmente até liquidação. Antes do kickoff, cancela normalmente e estorna (CANCELAR, sem P&L)
+  todas as proteções ativas daquele jogo.
+
 ### 2.4 Arquivos-chave (proteção)
 
 | Camada | Arquivo |
@@ -93,6 +116,26 @@ Cliente **1% da stake/responsabilidade** · BetBra **2,5% do lucro bruto** · Ar
 - Entrada só **antes do kickoff** (etapa `live` / `done` bloqueia).
 - Lucro alvo padrão do ciclo ~**5%**; comissão casa default **4,5%** no step.
 
+### 3.3a Odd ARBISHIELD — `odd_futgreen-surebet-v1`
+
+Por padrão, a `odd_futgreen` **não** é copiada 1:1 da odd de mercado da BetBra. Ela é **calculada**
+a partir da `odd_casa` real (BetBra) para garantir **~5% de lucro em ambos os resultados**
+(surebet/dutching clássico):
+
+```
+1/odd_futgreen + 1/odd_casa = 1 - 5%
+```
+
+- Função: `computeSurebetOddArbi({ oddCasa, targetProfit = 0.05 })` em
+  `scripts/lib/desafio-ciclo-math.mjs` (espelho browser em `public/js/desafio-ciclo-math.js`).
+- Aplicada automaticamente no carrinho da BetBra (`desafioFieldsFromSelections`,
+  `normalizePreliveEvent`) e no formulário manual do admin (`admin-desafios.html`, campo
+  "Odd ARBISHIELD" auto-preenchido a partir de "Odd Casa", editável manualmente).
+- No card do cliente (`app-desafio.html`), ao digitar o valor da entrada, o preview mostra também o
+  **valor equivalente a apostar na BetBra** (`suggestedHouseStake` — dutching, mesmo retorno bruto
+  nos dois lados), replicando o exemplo visual: entrada ARBISHIELD × odd = "Você recebe";
+  stake equivalente na BetBra × odd_casa = mesmo retorno.
+
 ### 3.3 Formas de ganho / resultado (Desafio) — `desafio-indicacao-settle-v1`
 
 A ArbiShield **sempre indica um lado para vencer na BetBra**. Vocabulário: **Indicação venceu** ·
@@ -113,14 +156,24 @@ A ArbiShield **sempre indica um lado para vencer na BetBra**. Vocabulário: **In
 
 **Layout do card (`desafio-painel-lado-time-v1`):** quadro fica sob o time apostado; casa sempre com logo (`desafio-casa-logo-v1`).
 
-### 3.4 Cancelamento e exclusão
+### 3.3b Liquidação automática — `auto-settle-v1`
+
+Quando a etapa tem placar **confirmado por fonte externa** (`score_source` + `finished_at` +
+placar numérico), o sistema chama `settleDesafioStep` sozinho, com o `winningSide` deduzido do
+placar real vs. `bet_team_side` (o próprio `resolveDesafioMarketResult`/DNB decide o empate →
+Empate Anula). Roda junto do sync de placar (scheduler 45s + sync manual). Liquidação manual do
+admin continua disponível e tem prioridade (idempotente: corrida resolvida pelo guard
+`step.status === 'done'`).
+
+### 3.4 Cancelamento, exclusão e "Evento suspenso" — `desafio-evento-suspenso-v1`
 
 | Situação | Quem / o quê |
 |---|---|
-| Etapa **ao vivo** | Só **liquidar** — cancelar/excluir → **403** (`block-cancel-delete-andamento-v1`) |
+| Etapa **ao vivo** | Só **liquidar** — cancelar/excluir **sempre bloqueado** (mesmo Isaac/Carlos): marca `desafio.is_suspended=true`, mensagem "Evento suspenso", **bloqueia novas entradas** e preserva quem já está participando |
 | Publicado/agendado (não ao vivo) | **Isaac/Carlos** podem cancelar desafio e devolver entradas pendentes (`protect-ops-isaac-carlos-v1`) |
-| Cancel participação pendente | Estorno `desafio_cancel_refund` na Carteira Desafio |
-| Excluir | Soft-delete; não apaga ativo/publicado sem force; exige confirm |
+| Cliente cancela a própria entrada | Só **antes do kickoff** — botão "Cancelar entrada" no card (`app-desafio.html` → `POST /api/futgreen/desafio-entry-cancel`); estorno `desafio_cancel_refund` na Carteira Desafio |
+| Cancel participação pendente (admin) | Estorno `desafio_cancel_refund` na Carteira Desafio |
+| Excluir | Soft-delete; não apaga ativo/publicado sem force; exige confirm; mesma trava de "ao vivo" acima |
 
 ### 3.5 Arquivos-chave (Desafio)
 

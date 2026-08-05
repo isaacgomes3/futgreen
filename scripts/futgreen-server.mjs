@@ -15,7 +15,12 @@ import {
 import { assertTransferAllowed, labelForTxType, labelForBucket } from './lib/wallet-buckets-contract.mjs';
 import { parseAllowedAdminEmails, isAdminEmail } from './lib/admin-ops-contract.mjs';
 import { createProtection, matchLiquidityStats } from './lib/create-protection.mjs';
-import { settleProtection, closeProtection, cancelProtectionByClient } from './lib/settle-protection.mjs';
+import {
+  settleProtection,
+  closeProtection,
+  cancelProtectionByClient,
+  cancelMatchByAdmin,
+} from './lib/settle-protection.mjs';
 import {
   createDesafio,
   editDesafio,
@@ -25,8 +30,9 @@ import {
   settleDesafioStep,
   cancelDesafio,
   softDeleteDesafio,
+  cancelDesafioEntryByClient,
 } from './lib/desafio-ops.mjs';
-import { previewSinal } from './lib/desafio-ciclo-math.mjs';
+import { previewSinal, computeSurebetOddArbi } from './lib/desafio-ciclo-math.mjs';
 import {
   livereloadEnabled,
   attachLivereload,
@@ -61,6 +67,7 @@ import {
   dayKeyBrazil,
 } from './lib/match-phase.mjs';
 import { syncLiveScores, startLiveScoreScheduler } from './lib/live-score-sync.mjs';
+import { runAutoSettle } from './lib/auto-settle.mjs';
 import {
   hashPassword,
   verifyPassword,
@@ -315,6 +322,7 @@ async function handleApi(req, res, url) {
     // Placar automático (TheSportsDB) — throttle interno
     try {
       await syncLiveScores(store);
+      runAutoSettle(store);
     } catch { /* não bloqueia a fila */ }
     const all = url.searchParams.get('all') === '1';
     const now = Date.now();
@@ -615,7 +623,14 @@ async function handleApi(req, res, url) {
               away_logo: ev.away_logo,
               league: ev.league || null,
               bet_team_side: stepFromCart?.bet_team_side || body.bet_team_side || hint.bet_team_side || 'away',
-              odd_futgreen: Number(stepFromCart?.odd_futgreen ?? body.odd_futgreen ?? hint.odd_futgreen ?? 3.5),
+              odd_futgreen: Number(
+                stepFromCart?.odd_futgreen ??
+                  body.odd_futgreen ??
+                  hint.odd_futgreen ??
+                  (Number(body.odd_casa ?? hint.odd_casa) > 1
+                    ? computeSurebetOddArbi({ oddCasa: Number(body.odd_casa ?? hint.odd_casa) })
+                    : 3.5),
+              ),
               odd_casa: Number(stepFromCart?.odd_casa ?? body.odd_casa ?? hint.odd_casa ?? 1.5),
               liquidity: Number(stepFromCart?.liquidity ?? body.liquidity ?? hint.liquidity ?? 0),
               starts_at: ev.starts_at,
@@ -765,6 +780,16 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (p === '/api/futgreen/match-cancel' && method === 'POST') {
+    requireAdmin(ctx);
+    try {
+      const result = cancelMatchByAdmin(store, { matchId: body.match_id || body.id, adminEmail: ctx.adminEmail });
+      return send(res, 200, result);
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message, code: e.code });
+    }
+  }
+
   if (p === '/api/futgreen/match-settle' && method === 'POST') {
     requireAdmin(ctx);
     return settleMatch(res, ctx, body);
@@ -774,7 +799,8 @@ async function handleApi(req, res, url) {
     requireAdmin(ctx);
     try {
       const result = await syncLiveScores(store, { force: true });
-      return send(res, 200, { ok: true, ...result });
+      const autoSettled = runAutoSettle(store);
+      return send(res, 200, { ok: true, ...result, autoSettled });
     } catch (e) {
       return send(res, e.status || 500, { error: e.message || 'Falha no sync de placar' });
     }
@@ -865,6 +891,14 @@ async function handleApi(req, res, url) {
     const published = listPublishedDesafios(store).map((d) => getDesafioBundle(store, d.id));
     for (const b of published) await ensureStepsLogos(b?.steps);
     enrichStepsLiveState(published);
+    for (const b of published) {
+      for (const step of b?.steps || []) {
+        const mine = store.data.desafio_participations.find(
+          (x) => x.step_id === step.id && x.user_id === ctx.user.id && x.status === 'pending',
+        );
+        step.my_participation = mine || null;
+      }
+    }
     const unlocked = (ctx.user.wallet.desafio_balance_cents || 0) > 0;
     // preview=1: Visão Geral / discovery — lista publicados mesmo com carteira travada
     const preview = url.searchParams.get('preview') === '1';
@@ -924,6 +958,19 @@ async function handleApi(req, res, url) {
       return send(res, 200, result);
     } catch (e) {
       return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  if (p === '/api/futgreen/desafio-entry-cancel' && method === 'POST') {
+    if (ctx.impersonating) return send(res, 403, { error: 'Espelho: cancelamento readonly' });
+    try {
+      const result = cancelDesafioEntryByClient(store, {
+        participationId: body.participation_id || body.id,
+        userId: ctx.user.id,
+      });
+      return send(res, 200, { ...result, wallet: store.getUser(ctx.user.id).wallet });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message, code: e.code });
     }
   }
 
@@ -1932,7 +1979,14 @@ async function boot() {
       console.log(`Local auth: senhas seed aplicadas (${LOCAL_DEV_PASSWORD})`);
     }
   }
-  startLiveScoreScheduler(store, { intervalMs: 45_000 });
+  startLiveScoreScheduler(store, {
+    intervalMs: 45_000,
+    onAfterSync: () => {
+      try {
+        runAutoSettle(store);
+      } catch { /* não derruba o scheduler */ }
+    },
+  });
   console.log('Live score sync: ON (TheSportsDB · 45s)');
   const onListen = () => {
     const where = LISTEN_HOST ? `${LISTEN_HOST}:${PORT}` : `0.0.0.0:${PORT}`;

@@ -52,6 +52,12 @@ export function createProtection(store, { userId, matchId, side, odd, amountCent
   if (!match || !match.is_published) {
     throw Object.assign(new Error('Jogo não publicado'), { status: 400 });
   }
+  if (match.suspended) {
+    throw Object.assign(new Error('Evento suspenso — novas entradas bloqueadas'), {
+      status: 400,
+      code: 'EVENT_SUSPENDED',
+    });
+  }
 
   assertPreKickoff(match.starts_at, now);
 

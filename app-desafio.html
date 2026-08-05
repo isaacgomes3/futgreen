@@ -47,7 +47,7 @@
       </div>
       <form id="entry-form" class="fg-form">
         <label>
-          Stake ARBISHIELD (R$)
+          Entrar com (R$)
           <input name="stake" type="number" step="0.01" min="1" value="50" required autocomplete="off" />
         </label>
         <div id="entry-preview" class="fg-prot-preview"></div>
@@ -207,8 +207,11 @@
     function stepCardHtml(desafio, step) {
       const zebraTeam = step.bet_team_side === 'away' ? step.away_team : step.home_team;
       const closed = stepClosed(step);
-      const canEnter = !closed && unlockedWallet;
+      const suspended = Boolean(desafio.is_suspended);
+      const canEnter = !closed && !suspended && unlockedWallet;
       const key = `${desafio.id}|${step.id}`;
+      const mine = step.my_participation;
+      const canCancelEntry = mine && !closed && !kickoffPassed(step.starts_at);
       const bg = step.home_logo || step.away_logo ? '/public/assets/hero-stadium.jpg' : '/public/assets/hero-stadium.jpg';
       return `
       <article class="fg-match fg-ind-card${closed ? ' is-finished' : ''}" data-key="${key}">
@@ -221,6 +224,11 @@
             ${statusBadgeHtml(step)}
             <span class="fg-ind-league" title="${step.league || 'Futebol'}">${shortLeagueName(step.league)}</span>
           </div>
+          ${suspended ? `<p class="fg-meta" style="color:#ffb020;margin:.35rem 0 0">Evento suspenso — partida em andamento; novas entradas bloqueadas. Quem já está participando continua protegido.</p>` : ''}
+          ${mine ? `<div class="fg-ind-mine" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.35rem">
+            <span class="fg-meta" style="margin:0">Sua entrada: ${brl(mine.stake_cents)}</span>
+            ${canCancelEntry ? `<button type="button" class="fg-btn ghost" data-act="cancel-entry" data-part="${mine.id}" style="padding:.25rem .6rem;font-size:.8rem">Cancelar entrada</button>` : ''}
+          </div>` : ''}
           <div class="fg-ind-teams">
             ${teamRowHtml(step.home_team, step.home_logo, step.status === 'done' ? (step.home_score ?? 0) : (isStepLive(step) ? (step.display_home_score ?? step.home_score ?? 0) : null))}
             ${teamRowHtml(step.away_team, step.away_logo, step.status === 'done' ? (step.away_score ?? 0) : (isStepLive(step) ? (step.display_away_score ?? step.away_score ?? 0) : null))}
@@ -308,16 +316,19 @@
       const prev = previewSinal(step, stakeReais);
       el.innerHTML = `
         <div class="fg-prot-preview-grid">
-          <div><span>Se a indicação vencer</span><strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong></div>
+          <div><span>Você recebe</span><strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong></div>
+          <div><span>Equivalente na BetBra @ ${prev.oddCasa}</span><strong>${brl(Math.round(prev.houseStake * 100))}</strong></div>
         </div>
         <p class="fg-meta" style="margin:0.45rem 0 0">
-          Se a indicação não vencer (Casa ou Empate Anula): sem crédito adicional — stake permanece com a plataforma
-          exceto Empate Anula, que estorna integralmente na Carteira Desafio.
+          Se a indicação vencer na BetBra: você já recebe fora, sem crédito adicional aqui.<br />
+          Se a indicação não vencer (Casa ou Empate Anula): a Carteira Desafio credita
+          <strong>${brl(Math.round(prev.payoutIfZebra * 100))}</strong> (stake + lucro), como proteção.
         </p>`;
     }
 
     function openEntryModal(desafio, step) {
       if (me.impersonating) return toast('Espelho: Desafio é readonly');
+      if (desafio.is_suspended) return toast('Evento suspenso — novas entradas bloqueadas');
       if (stepClosed(step)) return toast('Partida já iniciada — entrada encerrada');
       if (!unlockedWallet) return toast('Deposite na Carteira Desafio para entrar');
       current = { desafio, step };
@@ -339,6 +350,22 @@
           const item = byKey[art.dataset.key];
           if (!item) return;
           openEntryModal(item.desafio, item.step);
+        };
+      });
+      root.querySelectorAll('[data-act="cancel-entry"]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (me.impersonating) return toast('Espelho: Desafio é readonly');
+          if (!confirm('Cancelar sua entrada? O valor volta para a Carteira Desafio.')) return;
+          try {
+            await api('/api/futgreen/desafio-entry-cancel', {
+              method: 'POST',
+              body: { participation_id: btn.dataset.part },
+            });
+            toast('Entrada cancelada — valor estornado');
+            await load();
+          } catch (e) {
+            toast(e.message);
+          }
         };
       });
     }

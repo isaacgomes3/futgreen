@@ -10,34 +10,37 @@ export const DEFAULT_HOUSE_COMMISSION = 0.045;
 export const MAX_ENTRIES_PER_CYCLE = 5;
 
 /**
- * Valor sugerido na casa externa para cobrir a zebra FutGreen.
- * @param {number} stakeArbiReais - stake debitado da Carteira Desafio
- * @param {number} oddArbi - odd na FutGreen (zebra)
- * @param {number} oddCasa - odd na casa
- * @param {number} houseCommission - comissão casa (default 4,5%)
+ * odd_futgreen-surebet-v1: gera a odd ARBISHIELD a partir da odd_casa real (BetBra)
+ * garantindo lucro alvo (default 5%) em ambos os resultados — surebet clássico:
+ * 1/oddArbi + 1/oddCasa = 1 - targetProfit
+ * @param {number} oddCasa - odd real na BetBra (lado casa/favorito)
+ * @param {number} targetProfit - margem de lucro alvo (default 5%)
  */
-export function suggestedHouseStake({
-  stakeArbiReais,
-  oddArbi,
-  oddCasa,
-  houseCommission = DEFAULT_HOUSE_COMMISSION,
-  targetProfit = DEFAULT_TARGET_PROFIT,
-}) {
+export function computeSurebetOddArbi({ oddCasa, targetProfit = DEFAULT_TARGET_PROFIT }) {
+  const oc = Number(oddCasa);
+  const m = Number(targetProfit);
+  if (!(oc > 1)) throw new Error('odd_casa inválida para gerar odd surebet');
+  const inv = 1 - m - 1 / oc;
+  if (!(inv > 0)) throw new Error('não é possível gerar odd surebet com essa odd_casa/margem');
+  return Math.round((1 / inv) * 100) / 100;
+}
+
+/**
+ * Valor a apostar na BetBra (odd_casa) para igualar o retorno da entrada ARBISHIELD,
+ * travando o mesmo retorno bruto em ambos os lados (dutching clássico).
+ * @param {number} stakeArbiReais - stake debitado da Carteira Desafio
+ * @param {number} oddArbi - odd na ARBISHIELD (zebra/indicação)
+ * @param {number} oddCasa - odd real na BetBra
+ */
+export function suggestedHouseStake({ stakeArbiReais, oddArbi, oddCasa }) {
   const s = Number(stakeArbiReais);
   const oa = Number(oddArbi);
   const oc = Number(oddCasa);
   if (!(s > 0) || !(oa > 1) || !(oc > 1)) {
     throw new Error('parâmetros inválidos para suggestedHouseStake');
   }
-
-  // Payout zebra líquido alvo
-  const zebraReturn = s * oa;
-  // Stake casa para equalizar com comissão sobre lucro
-  // stake_casa ≈ (zebraReturn * (1+target) - s) / (oc_eff - 1) — forma prática:
-  const ocEff = 1 + (oc - 1) * (1 - houseCommission);
-  const cover = (s * (oa - 1)) / (ocEff - 1);
-  const withBuffer = cover * (1 + targetProfit * 0); // buffer opcional no step
-  return Math.round(withBuffer * 100) / 100;
+  const betbraStake = (s * oa) / oc;
+  return Math.round(betbraStake * 100) / 100;
 }
 
 /** Crédito na Carteira Desafio quando a indicação perde na BetBra (proteção) */
@@ -84,13 +87,7 @@ export function previewSinal(step, stakeArbiReais) {
   const oddArbi = Number(step.odd_arbishield || step.odd_futgreen || step.oddArbi);
   const oddCasa = Number(step.odd_casa || step.oddCasa);
   const liq = Number(step.liquidity || step.liquidez || 0);
-  const houseCommission = Number(step.house_commission ?? DEFAULT_HOUSE_COMMISSION);
-  const houseStake = suggestedHouseStake({
-    stakeArbiReais,
-    oddArbi,
-    oddCasa,
-    houseCommission,
-  });
+  const houseStake = suggestedHouseStake({ stakeArbiReais, oddArbi, oddCasa });
   return {
     stakeArbi: stakeArbiReais,
     oddArbi,
@@ -98,7 +95,6 @@ export function previewSinal(step, stakeArbiReais) {
     houseStake,
     liquidity: liq,
     targetProfit: DEFAULT_TARGET_PROFIT,
-    houseCommission,
     payoutIfZebra: Math.round(stakeArbiReais * oddArbi * 100) / 100,
   };
 }

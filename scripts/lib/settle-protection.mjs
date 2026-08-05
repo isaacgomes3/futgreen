@@ -127,6 +127,40 @@ export function cancelProtectionByClient(store, { protectionId, userId, now = ne
   });
 }
 
+/**
+ * protecao-evento-suspenso-v1: admin cancela o evento inteiro.
+ * Por segurança, NUNCA cancela evento em andamento (protege quem já está
+ * participando) — suspende novas entradas e avisa "Evento suspenso" em vez de
+ * derrubar o card com estorno. Antes do kickoff, cancela normalmente (estorna
+ * todas as proteções ativas via CANCELAR, sem P&L).
+ */
+export function cancelMatchByAdmin(store, { matchId, adminEmail, now = new Date() }) {
+  const m = store.data.matches.find((x) => x.id === matchId);
+  if (!m) throw Object.assign(new Error('Jogo não encontrado'), { status: 404 });
+  if (m.settled_at) throw Object.assign(new Error('Jogo já liquidado'), { status: 400 });
+
+  const kickoff = new Date(m.starts_at).getTime();
+  const isLive = Number.isFinite(kickoff) && now.getTime() >= kickoff && !m.finished_at;
+  if (isLive) {
+    m.suspended = true;
+    m.suspended_at = new Date().toISOString();
+    store.save();
+    throw Object.assign(
+      new Error('Evento suspenso — partida em andamento. Proteção mantida para quem já está participando; novas entradas bloqueadas.'),
+      { status: 403, code: 'EVENT_SUSPENDED' },
+    );
+  }
+
+  const cancelled = [];
+  for (const p of store.data.protections.filter((x) => x.match_id === matchId && x.status === 'active')) {
+    cancelled.push(settleProtection(store, { protectionId: p.id, outcome: PROTECTION_OUTCOMES.CANCELAR, adminEmail }));
+  }
+  m.is_published = false;
+  m.cancelled_at = new Date().toISOString();
+  store.save();
+  return { match: m, cancelled };
+}
+
 /** Encerrar sem estorno (protection-close) */
 export function closeProtection(store, { protectionId, adminEmail }) {
   const p = store.data.protections.find((x) => x.id === protectionId);
