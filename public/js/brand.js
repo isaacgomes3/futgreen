@@ -1,18 +1,18 @@
-/** Identidade FUTGREEN */
+/** Identidade ARBISHIELD */
 export const BRAND = {
-  name: 'FUTGREEN',
-  short: 'FUTGREEN',
-  legal: 'FutGreen',
-  tagline: 'Proteção & Desafio',
-  /** FUT branco · GREEN lime — mesmo corte visual da marca */
-  parts: { lead: 'FUT', accent: 'GREEN' },
-  mark: '/public/brand/futgrn-mark.svg',
-  avatar: '/public/brand/futgrn-avatar.svg',
-  iconPng: '/public/brand/futgrn-icon-1024.png',
+  name: 'ARBISHIELD',
+  short: 'ARBISHIELD',
+  legal: 'ArbiShield',
+  tagline: '',
+  /** ARBI branco · SHIELD lime — mesmo corte visual da marca */
+  parts: { lead: 'ARBI', accent: 'SHIELD' },
+  mark: '/public/brand/arbishield-mark.svg',
+  avatar: '/public/brand/arbishield-avatar.svg',
+  iconPng: '/public/brand/arbishield-icon-1024.png',
   favicon: '/public/brand/favicon.svg',
 };
 
-/** Wordmark HTML: FUT (branco) + GREEN (lime) */
+/** Wordmark HTML: ARBI (branco) + SHIELD (lime) */
 export function wordmarkHtml() {
   return `<span class="fg-wordmark" aria-label="${BRAND.name}"><span class="fg-wm-lead">${BRAND.parts.lead}</span><span class="fg-wm-accent">${BRAND.parts.accent}</span></span>`;
 }

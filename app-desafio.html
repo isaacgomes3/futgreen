@@ -4,15 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/public/brand/favicon.svg" type="image/svg+xml" />
-  <title>Desafio · FUTGRN</title>
+  <title>Desafio · ARBISHIELD</title>
   <link rel="stylesheet" href="/public/css/futgreen.css" />
 </head>
 <body>
   <div class="fg-shell" id="fg-shell-root">
     <main class="fg-main">
       <section class="fg-section">
-        <h2>Desafio FUTGRN</h2>
-        <p class="lead">Aposte na zebra com a odd FUTGRN · entrada sai da Carteira Jornada.</p>
+        <h2>Desafio ARBISHIELD</h2>
+        <p class="lead">Aposte na zebra com a odd ARBISHIELD · entrada sai da Carteira Jornada.</p>
         <div id="lock" class="fg-empty" hidden></div>
         <div id="grade" class="fg-grid fg-ind-grid"></div>
       </section>
@@ -24,12 +24,12 @@
     </main>
   </div>
 
-  <!-- Entrada / apostar na FUTGRN -->
+  <!-- Entrada / apostar na ARBISHIELD -->
   <div id="entry-modal" class="fg-modal" hidden>
     <div class="fg-modal-backdrop" data-act="close"></div>
     <div class="fg-modal-panel" role="dialog" aria-modal="true" aria-labelledby="entry-modal-title">
       <button type="button" class="fg-modal-x" data-act="close" aria-label="Fechar">×</button>
-      <h3 id="entry-modal-title">Entrada · Desafio FUTGRN</h3>
+      <h3 id="entry-modal-title">Entrada · Desafio ARBISHIELD</h3>
       <p id="entry-modal-event" class="fg-meta"></p>
       <div class="fg-prot-locked">
         <div>
@@ -38,7 +38,7 @@
         </div>
         <div>
           <span class="fg-meta" style="margin:0">Lado</span>
-          <strong id="entry-modal-side" class="fg-prot-side is-back">FUTGRN</strong>
+          <strong id="entry-modal-side" class="fg-prot-side is-back">ARBISHIELD</strong>
         </div>
         <div>
           <span class="fg-meta" style="margin:0">Odd</span>
@@ -47,11 +47,11 @@
       </div>
       <form id="entry-form" class="fg-form">
         <label>
-          Stake FUTGRN (R$)
+          Stake ARBISHIELD (R$)
           <input name="stake" type="number" step="0.01" min="1" value="50" required autocomplete="off" />
         </label>
         <div id="entry-preview" class="fg-prot-preview"></div>
-        <button class="fg-btn" type="submit">Apostar na FUTGRN</button>
+        <button class="fg-btn" type="submit">Apostar na ARBISHIELD</button>
       </form>
     </div>
   </div>
@@ -160,7 +160,7 @@
     }
 
     function resultLabel(step) {
-      if (step.result === 'zebra_protected') return 'Zebra venceu (FUTGRN)';
+      if (step.result === 'zebra_protected') return 'Zebra venceu (ARBISHIELD)';
       if (step.result === 'win') return 'Casa venceu';
       if (step.result === 'empate_anula') return 'Empate anula';
       return 'Liquidado';
@@ -196,11 +196,11 @@
                 ${!canEnter ? `disabled title="${closed ? 'Partida iniciada — entrada encerrada' : 'Deposite na Carteira Jornada para entrar'}"` : ''}>
                 <span class="fg-ind-mkt-line">
                   <span class="fg-ind-mkt-main">
-                    <strong>FUTGRN</strong>
+                    <strong>ARBISHIELD</strong>
                     <span class="fg-meta" style="margin:0">Liq. ${brl((step.liquidity || 0) * 100)}</span>
                   </span>
                   <span class="fg-ind-mkt-odds">
-                    <span class="fg-prot-side is-back">FUTGRN</span>
+                    <span class="fg-prot-side is-back">ARBISHIELD</span>
                     <strong>${Number(step.odd_futgreen).toFixed(2)}</strong>
                   </span>
                 </span>

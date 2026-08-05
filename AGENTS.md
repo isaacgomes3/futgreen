@@ -1,4 +1,4 @@
-# AGENTS.md — FutGreen
+# AGENTS.md — ArbiShield
 
 ## protection-flow-lock
 

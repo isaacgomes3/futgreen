@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="FUTGRN">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="ARBISHIELD">
   <defs>
     <linearGradient id="avGlow" x1="15%" y1="10%" x2="90%" y2="90%">
       <stop offset="0%" stop-color="#e6ff66"/>
@@ -20,6 +20,5 @@
     C43 97 29 82 29 60
     V33
     C36 28 52 22 64 22Z"/>
-  <path fill="#070908" d="M48 42h32v9H58v9h18v9H58v16H48V42z"/>
-  <circle cx="64" cy="70" r="2.8" fill="#070908"/>
+  <path fill="none" stroke="#070908" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" d="M47 62l13 13 22-26"/>
 </svg>

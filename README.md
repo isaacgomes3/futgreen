@@ -1,6 +1,6 @@
-# FUTGRN
+# ARBISHIELD
 
-Marca **FUTGRN** (repo `futgreen`) — Jogos Protegidos (`stake_lock_v1`) e Desafio.
+Marca **ARBISHIELD** (repo `futgreen`) — Jogos Protegidos (`stake_lock_v1`) e Desafio.
 
 Identidade visual: `public/brand/` · kit em `/brand.html`
 

@@ -27,13 +27,13 @@ Lucro bruto na BetBra:
 
 Se a indicação **vencer** (GANHO):
 
-| Parcela | Base | Carteira FutGreen |
+| Parcela | Base | Carteira ArbiShield |
 |---|---|---|
 | Cliente | **1% da stake/responsabilidade** | — (fica no lucro BetBra) |
 | Exchange (BetBra) | **2,5% do lucro bruto** | — |
-| FutGreen | lucro bruto − cliente − exchange | **não** debita Saldo Apostador |
+| ArbiShield | lucro bruto − cliente − exchange | **não** debita Saldo Apostador |
 
-Ex.: responsabilidade R$ 1.000 · lucro bruto R$ 161,29 → cliente **R$ 10,00** · BetBra R$ 4,03 · FutGreen R$ 147,26.
+Ex.: responsabilidade R$ 1.000 · lucro bruto R$ 161,29 → cliente **R$ 10,00** · BetBra R$ 4,03 · ArbiShield R$ 147,26.
 
 | Resultado | Carteira |
 |---|---|

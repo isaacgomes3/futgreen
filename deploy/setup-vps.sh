@@ -4,7 +4,7 @@
 set -euo pipefail
 
 APP_DIR=/var/www/futgreen
-DOMAIN="${FUTGRN_DOMAIN:-futgreen.com.br}"
+DOMAIN="${FUTGRN_DOMAIN:-arbishield.app}"
 
 echo "==> Diretório $APP_DIR"
 mkdir -p "$APP_DIR/data" "$APP_DIR/logs"

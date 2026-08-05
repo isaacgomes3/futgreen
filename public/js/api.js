@@ -1,4 +1,4 @@
-/** Cliente HTTP FutGreen */
+/** Cliente HTTP ArbiShield */
 const FG_API = '';
 
 export function getEmail() {

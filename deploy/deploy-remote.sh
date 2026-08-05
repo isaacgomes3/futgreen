@@ -41,4 +41,4 @@ echo "==> Setup / restart na VPS"
 ssh "$HOST" "bash ${APP_DIR}/deploy/setup-vps.sh"
 
 echo ""
-echo "Health: curl -sf https://futgreen.com.br/health || curl -sf http://127.0.0.1:3101/health (na VPS)"
+echo "Health: curl -sf https://arbishield.app/health || curl -sf http://127.0.0.1:3101/health (na VPS)"

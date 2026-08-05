@@ -54,12 +54,12 @@ Vocabulário da UI: **Reembolso** · **Ganho** · **Anula**.
 | Resultado (admin/UI) | Significado | Locked stake | Dinheiro |
 |---|---|---|---|
 | **Reembolso** (indicação falhou) | Cliente perdeu na BetBra | — | Stake **integral** → **Saldo Reembolso** |
-| **Ganho** (indicação bateu) | Cliente ganhou na BetBra | — | **Sem movimento**; split 1% da entrada / 2,5% do bruto / resto FutGreen |
+| **Ganho** (indicação bateu) | Cliente ganhou na BetBra | — | **Sem movimento**; split 1% da entrada / 2,5% do bruto / resto ArbiShield |
 | **Anula** (Empate Anula / void) | Empate ou void | — | Sem P&L (nem usuário nem empresa) |
 | **Cancelar** | Admin ou contestação | — | Sem movimento |
 
 **Entrada (v13):** não trava stake. **Economia no GANHO:** BACK = `stake×(odd−1)` · LAY = `liability/(odd−1)`.  
-Cliente **1% da stake/responsabilidade** · BetBra **2,5% do lucro bruto** · FutGreen = bruto − cliente − taxa — sem débito no Apostador.
+Cliente **1% da stake/responsabilidade** · BetBra **2,5% do lucro bruto** · ArbiShield = bruto − cliente − taxa — sem débito no Apostador.
 
 ### 2.4 Arquivos-chave (proteção)
 

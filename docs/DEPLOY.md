@@ -1,16 +1,18 @@
-# Deploy — FUTGRN
+# Deploy — ARBISHIELD
 
 | Item | Valor |
 |---|---|
 | VPS | `tips3x3` · `92.113.33.148` |
-| Domínio | `futgreen.com.br` (+ `www`) |
+| Domínio | `arbishield.app` (+ `www`) |
 | App dir | `/var/www/futgreen` |
 | Porta interna | `3101` |
 | Processo | PM2 `futgreen` |
 
+> Nota: `App dir` e `Processo` mantêm o identificador técnico legado `futgreen` (fora do escopo do rebrand visual). O domínio de produção passou a ser `arbishield.app` — antes de fazer o cutover, aponte o DNS para o novo domínio e emita o certificado SSL (passo manual no VPS, ver abaixo).
+
 ## DNS (obrigatório)
 
-No registrador do domínio, crie:
+No registrador do domínio `arbishield.app`, crie:
 
 | Tipo | Nome | Valor |
 |---|---|---|
@@ -33,13 +35,13 @@ ssh tips3x3 'bash /var/www/futgreen/deploy/setup-vps.sh'
 ## SSL (depois do DNS propagar)
 
 ```bash
-ssh tips3x3 'certbot --nginx -d futgreen.com.br -d www.futgreen.com.br --non-interactive --agree-tos -m admin@futgreen.com.br --redirect'
+ssh tips3x3 'certbot --nginx -d arbishield.app -d www.arbishield.app --non-interactive --agree-tos -m admin@arbishield.app --redirect'
 ```
 
 ## Smoke
 
 ```bash
-curl -sf https://futgreen.com.br/health
+curl -sf https://arbishield.app/health
 # expect: stake_lock_v1 + protection-runtime-stake-lock-v14
 ```
 
