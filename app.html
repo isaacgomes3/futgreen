@@ -24,13 +24,6 @@
         <div class="fg-event-rail-track" id="event-rail-track" tabindex="0"></div>
       </section>
 
-      <div class="fg-kpi-row" id="kpis">
-        <div class="fg-kpi"><label>Saldo Apostador</label><strong class="lime" id="k-bal">—</strong></div>
-        <div class="fg-kpi"><label>Saldo Reembolso</label><strong id="k-reemb">—</strong></div>
-        <div class="fg-kpi"><label>Proteções Ativas</label><strong id="k-prot">—</strong></div>
-        <div class="fg-kpi"><label>Carteira Desafio</label><strong class="lime" id="k-des">—</strong></div>
-      </div>
-
       <div class="fg-dash-bottom">
         <article class="fg-card fg-news-card">
           <div class="fg-news-head">
@@ -52,6 +45,7 @@
               </div>
               <strong id="win-rate">—</strong>
             </div>
+            <div class="fg-ops-row"><span>Proteções ativas</span><strong id="k-prot">0</strong></div>
             <div class="fg-ops-row"><span>Proteções liquidas</span><strong id="op-settled">0</strong></div>
             <div class="fg-ops-row"><span>Reembolsos</span><strong id="op-reemb">0</strong></div>
             <div class="fg-ops-row"><span>Saldo Provedor</span><strong id="op-prov">—</strong></div>
@@ -85,9 +79,6 @@
     const me = await mountShell();
     const w = me.wallet || {};
 
-    document.getElementById('k-bal').textContent = brl(w.balance_cents);
-    document.getElementById('k-reemb').textContent = brl(w.deduction_balance_cents);
-    document.getElementById('k-des').textContent = brl(w.desafio_balance_cents);
     document.getElementById('op-prov').textContent = brl(w.investor_balance_cents);
 
     const patrimonio =
