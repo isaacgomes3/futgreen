@@ -1,5 +1,16 @@
 # Releases ArbiShield
 
+## arbishield-1.4.0 (2026-08)
+
+- **Pedido explícito do dono** — inverte a regra de crédito da liquidação do Desafio (`desafio-indicacao-settle-v1`), ver `docs/SYSTEM_NON_REGRESSION.md`:
+  - **Indicação venceu** na BetBra → cliente já foi pago **fora** (na BetBra); **sem crédito** na Carteira Desafio (era o contrário antes)
+  - **Indicação perdeu** na BetBra → ArbiShield **protege**: credita **stake + lucro** na Carteira Desafio, ciclo continua até vencer (até 5 etapas)
+  - Terminologia sempre **"Indicação venceu"/"Indicação perdeu"** — removido "Bateu ARBISHIELD"/"Bateu Casa" dos botões admin (`admin-desafios.html`, `admin-monitoring-desafios.html`) e do label do cliente (`app-desafio.html`)
+  - `step.result`: `indicacao_venceu` / `indicacao_perdeu` / `empate_anula` (antes: `zebra_protected` / `win`); `part.result`: `indicacao_venceu` / `protegido` / `void` (antes: `won` / `lost`)
+  - Etapas já liquidadas antes desta versão **não são reprocessadas** — só afeta liquidações novas
+  - Novo teste dedicado: `tests/desafio-settle-indicacao.test.mjs`
+  - Docs sincronizadas: `docs/FUNCIONAMENTO_DESAFIO_E_PROTECAO.md`, `docs/SYSTEM_NON_REGRESSION.md`
+
 ## arbishield-1.3.4 (2026-08)
 
 - Feat: sync de placar agora também preenche o escudo do time (home_logo/away_logo) com a imagem do FotMob (`images.fotmob.com/image_resources/logo/teamlogo/{id}_small.png`) quando o card não tem logo — usa o `id` do time que já vem no mesmo payload do FotMob usado pra achar o placar, sem precisar de outra chamada

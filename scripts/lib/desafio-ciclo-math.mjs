@@ -40,7 +40,7 @@ export function suggestedHouseStake({
   return Math.round(withBuffer * 100) / 100;
 }
 
-/** Crédito na Carteira Desafio quando Bateu FutGreen (zebra) */
+/** Crédito na Carteira Desafio quando a indicação perde na BetBra (proteção) */
 export function zebraPayoutCents(stakeCents, oddArbi) {
   const stake = Number(stakeCents);
   const odd = Number(oddArbi);

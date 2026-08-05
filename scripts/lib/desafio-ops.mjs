@@ -168,14 +168,22 @@ export function registerDesafioEntry(store, { userId, desafioId, stepId, stakeCe
   return part;
 }
 
+/**
+ * desafio-indicacao-settle-v1: a ArbiShield sempre indica um lado para vencer na BetBra.
+ * - Indicação venceu na BetBra → cliente já foi pago fora (na BetBra); sem crédito na
+ *   Carteira Desafio.
+ * - Indicação perdeu na BetBra → ArbiShield protege: credita stake + lucro na Carteira
+ *   Desafio, e o ciclo continua (até 5 etapas) até a indicação vencer na BetBra.
+ * Vocabulário: sempre "indicação venceu" / "indicação perdeu" — nunca "bateu"/"casa" na UI.
+ */
 export function settleDesafioStep(store, { stepId, winningSide, adminEmail, homeScore, awayScore }) {
   const step = store.data.desafio_steps.find((s) => s.id === stepId);
   if (!step) throw Object.assign(new Error('Etapa não encontrada'), { status: 404 });
 
   let side = String(winningSide || '').toLowerCase();
-  // Aliases UI
-  if (side === 'arbishield' || side === 'futgreen' || side === 'zebra') side = 'futgreen';
-  if (side === 'casa' || side === 'house') side = 'casa';
+  // Aliases UI — 'futgreen' = indicação venceu; 'casa' = indicação perdeu
+  if (side === 'arbishield' || side === 'futgreen' || side === 'zebra' || side === 'indicacao_venceu') side = 'futgreen';
+  if (side === 'casa' || side === 'house' || side === 'indicacao_perdeu') side = 'casa';
   if (side === 'void' || side === 'empate_anula' || side === 'anula') side = 'void';
 
   const resolved = resolveDesafioMarketResult({
@@ -190,7 +198,7 @@ export function settleDesafioStep(store, { stepId, winningSide, adminEmail, home
 
   step.winning_side = finalSide;
   step.result =
-    finalSide === 'futgreen' ? 'zebra_protected' : finalSide === 'casa' ? 'win' : 'empate_anula';
+    finalSide === 'futgreen' ? 'indicacao_venceu' : finalSide === 'casa' ? 'indicacao_perdeu' : 'empate_anula';
   step.status = 'done';
   step.settled_at = new Date().toISOString();
   step.settled_by = adminEmail || null;
@@ -205,16 +213,17 @@ export function settleDesafioStep(store, { stepId, winningSide, adminEmail, home
     const user = store.getUser(part.user_id);
     if (!user) continue;
 
-    if (finalSide === 'futgreen') {
+    if (finalSide === 'casa') {
+      // Indicação perdeu na BetBra → proteção: credita stake + lucro (ciclo continua)
       const credit = zebraPayoutCents(part.stake_cents, part.odd || step.odd_futgreen);
       user.wallet.desafio_balance_cents = (user.wallet.desafio_balance_cents || 0) + credit;
       part.status = 'settled';
-      part.result = 'won';
+      part.result = 'protegido';
       // settle costuma creditar via PATCH — label opcional
-    } else if (finalSide === 'casa') {
+    } else if (finalSide === 'futgreen') {
+      // Indicação venceu na BetBra → cliente já foi pago lá fora, sem crédito interno
       part.status = 'settled';
-      part.result = 'lost';
-      // Sem crédito — stake fica com a plataforma
+      part.result = 'indicacao_venceu';
     } else {
       // void — devolve stake
       user.wallet.desafio_balance_cents = (user.wallet.desafio_balance_cents || 0) + part.stake_cents;

@@ -198,8 +198,8 @@
     }
 
     function resultLabel(step) {
-      if (step.result === 'zebra_protected') return 'Indicação venceu (ARBISHIELD)';
-      if (step.result === 'win') return 'Casa venceu';
+      if (step.result === 'indicacao_venceu') return 'Indicação venceu';
+      if (step.result === 'indicacao_perdeu') return 'Indicação perdeu';
       if (step.result === 'empate_anula') return 'Empate anula';
       return 'Liquidado';
     }

@@ -20,7 +20,7 @@
 | Carteira de entrada | Saldo Apostador (`balance_cents`) — stake é **travado** | Carteira Desafio (`desafio_balance_cents`) — stake é **debitado** |
 | Grade do cliente | `app-proteger.html` | `app-desafio.html` |
 | Admin principal | `admin-jogos.html` + monitor proteções | `admin-desafios.html` + `admin-monitoring-desafios.html` |
-| Liquidação | REEMBOLSO / GANHO / ANULA | Bateu Arbi / Bateu Casa / Empate Anula |
+| Liquidação | REEMBOLSO / GANHO / ANULA | Indicação venceu / Indicação perdeu / Empate Anula |
 | Modelo | `stake_lock_v1` | Ciclo zebra (`desafio-ciclo-sinais-v1`) |
 
 São produtos **independentes** (carteiras e APIs distintas), mas compartilham o extrato financeiro e o painel admin.
@@ -93,14 +93,20 @@ Cliente **1% da stake/responsabilidade** · BetBra **2,5% do lucro bruto** · Ar
 - Entrada só **antes do kickoff** (etapa `live` / `done` bloqueia).
 - Lucro alvo padrão do ciclo ~**5%**; comissão casa default **4,5%** no step.
 
-### 3.3 Formas de ganho / resultado (Desafio)
+### 3.3 Formas de ganho / resultado (Desafio) — `desafio-indicacao-settle-v1`
 
-Liquidação admin por etapa: **Bateu ArbiShield** · **Bateu Casa** · **Empate Anula**.
+A ArbiShield **sempre indica um lado para vencer na BetBra**. Vocabulário: **Indicação venceu** ·
+**Indicação perdeu** · **Empate Anula** — nunca "Bateu"/"Casa" na UI.
 
-| Botão admin | `winningSide` / step.result | Cliente na zebra | Dinheiro na Carteira Desafio |
+- **Indicação venceu** na BetBra → o cliente já foi pago **fora**, diretamente na BetBra. **Sem
+  crédito** na Carteira Desafio (o stake da etapa fica consumido).
+- **Indicação perdeu** na BetBra → a ArbiShield **protege**: credita **stake + lucro** na Carteira
+  Desafio, e o ciclo continua (até 5 etapas) até a indicação vencer na BetBra.
+
+| Botão admin | `winningSide` / step.result | Participação (`part.result`) | Dinheiro na Carteira Desafio |
 |---|---|---|---|
-| **Bateu ArbiShield** | `arbishield` → `zebra_protected` | `won` | Credita **stake + lucro** (reutilizável). Pode avançar ciclo / forfeit a provedores em alguns circuitos |
-| **Bateu Casa** | `casa` → `win` | `lost` | Sem crédito — stake fica com a plataforma. Lado casa (se houver) recebe **só o lucro** |
+| **Indicação venceu** | `futgreen` → `indicacao_venceu` | `indicacao_venceu` | Sem crédito — já pago na BetBra |
+| **Indicação perdeu** | `casa` → `indicacao_perdeu` | `protegido` | Credita **stake + lucro** (proteção; ciclo continua) |
 | **Empate Anula** | `void` / `empate_anula` | `void` | Devolve stake · tx `desafio_void_refund` |
 
 **Marcador de mercado (`desafio-dnb-flag-v1`):** Empate Anula/DNB é aposta **no time** (V no vencedor, × no outro, **E** se empatar) — não resolver pelo ramo 1X2 `isDraw`.
@@ -212,13 +218,13 @@ Editar jogo publicado **não** deve despublicar sem ação explícita (mesma ide
 1. Criar desafio + etapas (odd Arbi, odd casa, liquidez, horários).
 2. **Publicar** (ou “Publicar ao salvar”).
 3. **Editar** desafio já no ar: modo `edit_only` — **preserva** `is_active` / `published_at` (`admin-desafios-edit-preserva-publicacao-v1`).
-4. Liquidar etapa: Bateu Arbi / Casa / Empate Anula → `desafio-settle`.
+4. Liquidar etapa: Indicação venceu / Indicação perdeu / Empate Anula → `desafio-settle`.
 5. Cancelar / excluir: regras da §3.4.
 
 ### 5.3 Monitor de Desafios — `admin-monitoring-desafios.html`
 
 - Layout em **cards** (não tabela densa): zonas `mdz-card-top` / `mdz-card-game` / `mdz-card-foot`.
-- Settle rápido: Bateu Arbi / Bateu Casa / Empate Anula.
+- Settle rápido: Indicação venceu / Indicação perdeu / Empate Anula.
 
 ### 5.4 Monitor de Proteções — `admin-monitoring-protections.html`
 
@@ -320,8 +326,8 @@ flowchart LR
   A[Depósito Desafio / Reembolso→Desafio] --> B[Grade app-desafio]
   B --> C[desafio-register debita stake]
   C --> D{desafio-settle}
-  D -->|Bateu Arbi| E[Credita stake+lucro]
-  D -->|Bateu Casa| F[Sem crédito zebra]
+  D -->|Indicação venceu| E[Sem crédito — já pago na BetBra]
+  D -->|Indicação perdeu| F[Protege: credita stake+lucro, ciclo continua]
   D -->|Empate Anula| G[desafio_void_refund]
 ```
 

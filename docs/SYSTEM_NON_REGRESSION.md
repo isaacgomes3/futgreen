@@ -13,6 +13,7 @@
 - Desafio ao vivo: cancelar/excluir → 403
 - `edit_only` em desafios preserva `is_active` / `published_at`
 - Empate Anula/DNB: não liquidar pelo ramo 1X2 `isDraw`
+- Desafio — liquidação (`desafio-indicacao-settle-v1`, pedido explícito do dono 2026-08-04): indicação venceu na BetBra → **sem crédito** na Carteira Desafio (cliente já foi pago fora); indicação perdeu na BetBra → **credita stake + lucro** (proteção, ciclo continua); vocabulário sempre "Indicação venceu"/"Indicação perdeu", nunca "Bateu"/"Casa" na UI
 
 ## Checklist pós-deploy
 
