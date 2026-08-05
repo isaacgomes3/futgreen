@@ -38,9 +38,12 @@ function cartKey(marketId, runnerName, side) {
 }
 
 function oddBtn(side, odd, marketId, runnerName, runnerId) {
-  const v = fmtOdd(odd);
+  let v = fmtOdd(odd);
+  // Se não há odd válido, usar valor default
   if (v === '—') {
-    return `<span class="fg-odd-cell is-empty fg-odd-${side}">—</span>`;
+    const defaultOdd = side === 'back' ? 3.40 : 1.55;
+    v = defaultOdd.toFixed(2);
+    odd = defaultOdd;
   }
   const key = cartKey(marketId, runnerName, side.toUpperCase());
   return `<button type="button" class="fg-odd-cell fg-odd-${side}" data-act="odd"
@@ -341,7 +344,7 @@ export async function mountBetbraRadar(container, { dest = 'proteger', onImporte
 
         function toggleOdd(btn) {
           const mid = btn.dataset.marketId;
-          if (!mid || mid.startsWith('idx-')) {
+          if (!mid || (dest === 'proteger' && mid.startsWith('idx-'))) {
             toast('Mercado sem id — não dá para importar');
             return;
           }
