@@ -1,11 +1,18 @@
 /**
- * Sync automático de placar (TheSportsDB).
+ * Sync automático de placar. Duas fontes:
+ * 1) Feed in-play da própria BetBra/Bolsa de Aposta (mesma infra "jumper") — casa por
+ *    external_id exato (sem heurística de nome), preferencial quando disponível.
+ * 2) TheSportsDB — fallback por nome dos times quando o evento não está no feed in-play.
  * Atualiza home/away/minute/finished nos matches (Proteger) e nos steps de Desafio
  * ao vivo — nunca liquida proteção nem step (settle continua manual/admin).
  */
 
 const SPORTSDB = 'https://www.thesportsdb.com/api/v1/json';
 const API_KEY = () => process.env.SPORTSDB_API_KEY?.trim() || '3';
+
+const BETBRA_INPLAY_URL = 'https://betbra.bet.br/client/api/jumper/feedSports/inplay-info';
+const INPLAY_CACHE_TTL_MS = 20_000;
+let inplayCache = { at: 0, map: new Map() };
 
 const eventCache = new Map(); // key → { at, score }
 const CACHE_TTL_MS = 40_000;
@@ -97,6 +104,58 @@ function scoreFromEvent(ev) {
     event_id: ev.idEvent || null,
     source: 'thesportsdb',
   };
+}
+
+export function scoreFromInplayEntry(entry) {
+  if (!entry?.score?.home || !entry?.score?.away) return null;
+  const hs = Number(entry.score.home.score);
+  const as = Number(entry.score.away.score);
+  if (!Number.isFinite(hs) || !Number.isFinite(as)) return null;
+  const phase = String(entry.inPlayMatchStatus || entry.status || '').toLowerCase();
+  const finished = /full.?time|finished|ended|encerrado/.test(phase);
+  const halftime = /half.?time|firsthalfend|intervalo/.test(phase);
+  const minuteRaw = entry.timeElapsed ?? entry.elapsedRegularTime;
+  const minute = finished ? null : Number.isFinite(Number(minuteRaw)) ? Math.min(130, Math.max(0, Number(minuteRaw))) : null;
+  const period = halftime ? 'ht' : finished ? 'ft' : null;
+  return {
+    home_score: hs,
+    away_score: as,
+    finished,
+    minute,
+    period,
+    status: entry.inPlayMatchStatus || entry.status || null,
+    progress: null,
+    event_id: entry.eventId || null,
+    source: 'betbra',
+  };
+}
+
+async function fetchBetbraInplayMap() {
+  if (Date.now() - inplayCache.at < INPLAY_CACHE_TTL_MS) return inplayCache.map;
+  const map = new Map();
+  try {
+    const res = await fetch(BETBRA_INPLAY_URL, {
+      headers: { Accept: 'application/json', 'User-Agent': 'ArbiShield/1.0 (live-score)' },
+    });
+    if (res.ok) {
+      const list = await res.json();
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (entry?.eventId) map.set(String(entry.eventId), entry);
+      }
+    }
+  } catch {
+    /* mantém map vazio; syncLiveScores cai no fallback TheSportsDB */
+  }
+  inplayCache = { at: Date.now(), map };
+  return map;
+}
+
+export async function lookupScoreByExternalId(externalId) {
+  if (!externalId) return null;
+  const map = await fetchBetbraInplayMap();
+  const entry = map.get(String(externalId));
+  if (!entry) return null;
+  return scoreFromInplayEntry(entry);
 }
 
 async function lookupScore(homeTeam, awayTeam, startsAt) {
@@ -277,7 +336,9 @@ export async function syncLiveScores(store, { force = false } = {}) {
     let updated = 0;
     for (const m of groups.values()) {
       try {
-        const score = await lookupScore(m.home_team, m.away_team, m.starts_at);
+        const score =
+          (await lookupScoreByExternalId(m.external_id)) ||
+          (await lookupScore(m.home_team, m.away_team, m.starts_at));
         if (!score) continue;
         const changed = applyScoreToMatch(m, score);
         if (changed) {

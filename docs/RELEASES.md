@@ -1,5 +1,13 @@
 # Releases ArbiShield
 
+## arbishield-1.3.2 (2026-08)
+
+- Feat: sync de placar passa a usar também o feed in-play da própria BetBra/Bolsa de Aposta (`client/api/jumper/feedSports/inplay-info`, mesma infra "jumper" nos dois domínios) — casamento exato por `external_id`, sem depender de heurística de nome de time
+  - Preferencial sobre o TheSportsDB quando o evento está no feed; TheSportsDB continua como fallback
+  - Feed traz placar ao vivo, minuto (`timeElapsed`) e fase (`inPlayMatchStatus`: KickOff/FirstHalfEnd/SecondHalfKickOff etc.) já no formato usado pela BetBra, cobrindo melhor ligas latino-americanas que não estão no TheSportsDB
+  - `scoreFromInplayEntry` exportado e testado em `tests/live-score-sync.test.mjs`
+- Nota: o feed in-play só lista os eventos que a própria BetBra está tracking com scoreboard ativo no momento — jogos fora dessa lista continuam caindo no fallback TheSportsDB (e podem ficar sem placar em tempo real se nenhuma das duas fontes cobrir a competição)
+
 ## arbishield-1.3.1 (2026-08)
 
 - Fix: card do Desafio mostrava o nome dos times de novo na faixa onde o Proteger mostra o campeonato — passa a persistir `league` no step (vindo do evento BetBra) e exibir com o mesmo `shortLeagueName` do Proteger
